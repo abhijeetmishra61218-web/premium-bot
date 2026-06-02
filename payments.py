@@ -1,0 +1,2131 @@
+"""
+Premium Villa - Crypto Payments module (payments.py)
+Uses raw API for ALL displays to support animated emojis
+"""
+
+import os
+import re
+import json
+import time
+import uuid
+import html
+import asyncio
+import urllib.request
+import urllib.error
+import httpx
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, MessageEntity
+from telegram.ext import (
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ApplicationHandlerStop,
+)
+
+NL = chr(10)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PAY_FILE = os.path.join(BASE_DIR, "cryptos.json")
+ORDERS_FILE = os.path.join(BASE_DIR, "orders.json")
+ADMIN_ID = 0
+
+# Telegram API for raw requests
+BOT_TOKEN = None
+TG_API = None
+
+# ----- buyer payment flow tunables -----
+PAY_WINDOW_SECONDS = 15 * 60
+PAY_COUNTDOWN_TICK = 1
+PAY_CONF_POLL_TICK = 30
+PAY_CONF_MAX_POLLS = 240
+PAY_AMOUNT_TOLERANCE = 1.0
+
+_ACTIVE_TASKS = {}
+_SCAN_TASKS = {}
+_ACTIVE_ORDERS = {}
+_PENDING = {}
+
+USED_HASHES_FILE = os.path.join(BASE_DIR, "used_hashes.json")
+TX_TIME_GRACE = 300
+AUTOSCAN_TIME_GRACE = 300
+SCAN_TICK = 12
+
+def _load_used_hashes():
+    try:
+        with open(USED_HASHES_FILE, "r", encoding="utf-8") as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+def _hash_used(h):
+    if not h:
+        return False
+    return h.strip().lower() in _load_used_hashes()
+
+def _mark_hash_used(h):
+    if not h:
+        return
+    used = _load_used_hashes()
+    used.add(h.strip().lower())
+    try:
+        with open(USED_HASHES_FILE, "w", encoding="utf-8") as f:
+            json.dump(sorted(used), f)
+    except Exception:
+        pass
+
+def _pending_key(order):
+    return str(order.get("cid")) + "|" + _fmt_crypto(order.get("crypto_amount", 0),
+                                                      order.get("decimals", 8))
+
+def _count_other_pending(order, user_id):
+    members = _PENDING.get(_pending_key(order), set())
+    return len([u for u in members if u != user_id])
+
+TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+ESPLORA_BTC = "https://blockstream.info/api"
+ESPLORA_LTC = "https://litecoinspace.org/api"
+SOLANA_RPC = "https://api.mainnet-beta.solana.com"
+TRONSCAN_TX = "https://apilist.tronscanapi.com/api/transaction-info?hash="
+BSC_RPCS = [
+    "https://bsc-rpc.publicnode.com",
+    "https://binance.llamarpc.com",
+    "https://bsc-pokt.nodies.app",
+    "https://endpoints.omniatech.io/v1/bsc/mainnet/public",
+    "https://rpc.ankr.com/bsc",
+]
+BSC_RPC = BSC_RPCS[0]
+BSCSCAN_API = "https://api.bscscan.com/api"
+BSCSCAN_API_KEY = "QP1Q3K12E1CT5R35YV9ERBJ1SQ6ZWN4SP7"
+COINGECKO_PRICE = "https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
+
+USDT_BEP20_CONTRACT = "0x55d398326f99059fF775485246999027B3197955"
+USDT_TRC20_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+
+SUPPORTED_CHAINS = {
+    "btc":   {"label": "Bitcoin (BTC)",            "decimals": 8,  "coingecko": "bitcoin",  "stable": False, "token": None},
+    "ltc":   {"label": "Litecoin (LTC)",           "decimals": 8,  "coingecko": "litecoin", "stable": False, "token": None},
+    "sol":   {"label": "Solana (SOL)",             "decimals": 9,  "coingecko": "solana",   "stable": False, "token": None},
+    "trc20": {"label": "USDT - Tron (TRC20)",      "decimals": 6,  "coingecko": "tether",   "stable": True,  "token": USDT_TRC20_CONTRACT},
+    "bep20": {"label": "USDT - BSC (BEP20)",       "decimals": 18, "coingecko": "tether",   "stable": True,  "token": USDT_BEP20_CONTRACT},
+}
+
+def _default_cryptos():
+    return {
+        "cryptos": [
+            {"id": "btc", "name": "BTC", "chain": "btc", "address": "",
+             "coingecko_id": "bitcoin", "decimals": 8, "enabled": True,
+             "min_conf": 1, "is_usd_stable": False, "token_contract": None, "emoji_id": None},
+            {"id": "usdt_bep20", "name": "USDT(Bep20)", "chain": "bep20", "address": "",
+             "coingecko_id": "tether", "decimals": 18, "enabled": True,
+             "min_conf": 12, "is_usd_stable": True, "token_contract": USDT_BEP20_CONTRACT, "emoji_id": None},
+            {"id": "usdt_trc20", "name": "USDT(Trc20)", "chain": "trc20", "address": "",
+             "coingecko_id": "tether", "decimals": 6, "enabled": True,
+             "min_conf": 20, "is_usd_stable": True, "token_contract": USDT_TRC20_CONTRACT, "emoji_id": None},
+            {"id": "ltc", "name": "LTC", "chain": "ltc", "address": "",
+             "coingecko_id": "litecoin", "decimals": 8, "enabled": True,
+             "min_conf": 2, "is_usd_stable": False, "token_contract": None, "emoji_id": None},
+            {"id": "sol", "name": "SOL", "chain": "sol", "address": "",
+             "coingecko_id": "solana", "decimals": 9, "enabled": True,
+             "min_conf": 1, "is_usd_stable": False, "token_contract": None, "emoji_id": None},
+        ]
+    }
+
+# ========================= storage =========================
+def load_cryptos():
+    if not os.path.exists(PAY_FILE):
+        save_cryptos(_default_cryptos())
+    try:
+        with open(PAY_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        data = _default_cryptos()
+        save_cryptos(data)
+    if not isinstance(data, dict) or not isinstance(data.get("cryptos"), list):
+        data = _default_cryptos()
+        save_cryptos(data)
+    return data
+
+def save_cryptos(data):
+    with open(PAY_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def all_cryptos():
+    return load_cryptos()["cryptos"]
+
+def enabled_cryptos():
+    return [c for c in all_cryptos() if c.get("enabled") and c.get("address")]
+
+def get_crypto(cid):
+    for c in all_cryptos():
+        if c["id"] == cid:
+            return c
+    return None
+
+def _save_crypto(updated):
+    data = load_cryptos()
+    for i, c in enumerate(data["cryptos"]):
+        if c["id"] == updated["id"]:
+            data["cryptos"][i] = updated
+            break
+    save_cryptos(data)
+
+# ========================= formatting helpers =========================
+def _fmt_money(value):
+    try:
+        v = float(value)
+    except Exception:
+        return "$0"
+    if abs(v - round(v)) < 0.005:
+        return "$" + str(int(round(v)))
+    return "$" + ("%.2f" % v)
+
+def _fmt_crypto(amount, decimals=8):
+    try:
+        v = float(amount)
+    except Exception:
+        return str(amount)
+    s = ("%." + str(min(decimals, 8)) + "f") % v
+    if "." in s:
+        s = s.rstrip("0").rstrip(".")
+    return s or "0"
+
+# ========================= HTTP helpers =========================
+def _http_get(url, timeout=15, as_json=True):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read().decode("utf-8").strip()
+    return json.loads(raw) if as_json else raw
+
+def _http_post_json(url, payload, timeout=15):
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data, method="POST",
+        headers={"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+# ========================= price conversion =========================
+_PRICE_CACHE = {}
+_PRICE_TTL = 60
+
+def get_usd_price(coingecko_id):
+    if not coingecko_id:
+        return None
+    now = time.time()
+    cached = _PRICE_CACHE.get(coingecko_id)
+    if cached and (now - cached[0]) < _PRICE_TTL:
+        return cached[1]
+    try:
+        data = _http_get(COINGECKO_PRICE.format(ids=coingecko_id))
+        price = float(data[coingecko_id]["usd"])
+        _PRICE_CACHE[coingecko_id] = (now, price)
+        return price
+    except Exception:
+        return cached[1] if cached else None
+
+def usd_to_crypto(usd_amount, crypto):
+    if crypto.get("is_usd_stable"):
+        return float(usd_amount), 1.0
+    price = get_usd_price(crypto.get("coingecko_id"))
+    if not price or price <= 0:
+        return None, None
+    return float(usd_amount) / price, price
+
+# ========================= detection result builder =========================
+def _result(ok=True, found=False, amount=0.0, to_address=None, from_address=None,
+            confirmations=0, confirmed=False, status_ok=True, all_to=None, error=None,
+            timestamp=None):
+    return {
+        "ok": ok, "found": found, "amount": float(amount),
+        "to_address": to_address, "from_address": from_address,
+        "confirmations": int(confirmations), "confirmed": bool(confirmed),
+        "status_ok": bool(status_ok), "all_to": all_to or [], "error": error,
+        "timestamp": timestamp,
+    }
+
+# ----- BTC / LTC -----
+def _verify_esplora(base, txid, target, decimals):
+    tx = _http_get(base + "/tx/" + txid)
+    vout = tx.get("vout", []) or []
+    all_to = []
+    amount_to_target = 0
+    for o in vout:
+        addr = o.get("scriptpubkey_address")
+        val = int(o.get("value", 0) or 0)
+        if addr:
+            all_to.append(addr)
+        if target and addr == target:
+            amount_to_target += val
+    total_out = sum(int(o.get("value", 0) or 0) for o in vout)
+    from_addr = None
+    vin = tx.get("vin", []) or []
+    if vin:
+        prevout = vin[0].get("prevout") or {}
+        from_addr = prevout.get("scriptpubkey_address")
+    status = tx.get("status", {}) or {}
+    confirmed_in_block = bool(status.get("confirmed"))
+    confs = 0
+    if confirmed_in_block and status.get("block_height") is not None:
+        try:
+            tip = int(_http_get(base + "/blocks/tip/height", as_json=False))
+            confs = max(0, tip - int(status["block_height"]) + 1)
+        except Exception:
+            confs = 1
+    sats = amount_to_target if target else total_out
+    amount = sats / float(10 ** decimals)
+    primary_to = target if (target and amount_to_target > 0) else (all_to[0] if all_to else None)
+    ts = status.get("block_time")
+    return _result(ok=True, found=True, amount=amount, to_address=primary_to,
+                   from_address=from_addr, confirmations=confs, confirmed=confirmed_in_block,
+                   status_ok=True, all_to=all_to, timestamp=ts)
+
+# ----- Solana -----
+def _verify_sol(sig, target, decimals=9):
+    payload = {
+        "jsonrpc": "2.0", "id": 1, "method": "getTransaction",
+        "params": [sig, {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0,
+                         "commitment": "finalized"}],
+    }
+    res = _http_post_json(SOLANA_RPC, payload)
+    r = res.get("result")
+    if not r:
+        return _result(ok=True, found=False, error="Transaction not found / not finalized yet")
+    meta = r.get("meta") or {}
+    msg = (r.get("transaction") or {}).get("message") or {}
+    raw_keys = msg.get("accountKeys") or []
+    accounts = []
+    for k in raw_keys:
+        accounts.append(k.get("pubkey") if isinstance(k, dict) else k)
+    pre = meta.get("preBalances") or []
+    post = meta.get("postBalances") or []
+    amount = 0.0
+    if target and target in accounts:
+        idx = accounts.index(target)
+        if idx < len(pre) and idx < len(post):
+            amount = (post[idx] - pre[idx]) / float(10 ** decimals)
+    from_addr = accounts[0] if accounts else None
+    err = meta.get("err")
+    confirmed = err is None
+    ts = r.get("blockTime")
+    return _result(ok=True, found=True, amount=amount, to_address=target,
+                   from_address=from_addr, confirmations=(1 if confirmed else 0),
+                   confirmed=confirmed, status_ok=confirmed, all_to=accounts[:6], timestamp=ts)
+
+# ----- USDT TRC20 -----
+def _verify_trc20(txhash, target, contract, decimals=6):
+    data = _http_get(TRONSCAN_TX + txhash)
+    if not data or (not data.get("hash") and not data.get("trc20TransferInfo")):
+        return _result(ok=True, found=False, error="Transaction not found on Tronscan")
+    transfers = data.get("trc20TransferInfo") or []
+    confirmed_flag = bool(data.get("confirmed"))
+    contract_ret = data.get("contractRet") or "SUCCESS"
+    confs = int(data.get("confirmations") or (1 if confirmed_flag else 0))
+    amount = 0.0
+    to_addr = None
+    from_addr = None
+    all_to = []
+    for t in transfers:
+        ca = t.get("contract_address") or ""
+        if contract and ca and ca.lower() != contract.lower():
+            continue
+        dec = int(t.get("decimals", decimals) or decimals)
+        try:
+            val = float(t.get("amount_str", "0")) / float(10 ** dec)
+        except Exception:
+            val = 0.0
+        t_to = t.get("to_address")
+        t_from = t.get("from_address")
+        if t_to:
+            all_to.append(t_to)
+        if target and t_to == target:
+            amount += val
+            to_addr = t_to
+            from_addr = t_from
+        elif not target:
+            amount += val
+            to_addr = t_to
+            from_addr = t_from
+    if to_addr is None and transfers:
+        t = transfers[0]
+        to_addr = t.get("to_address")
+        from_addr = t.get("from_address")
+    ts = data.get("timestamp")
+    try:
+        ts = (float(ts) / 1000.0) if ts else None
+    except Exception:
+        ts = None
+    return _result(ok=True, found=True, amount=amount, to_address=to_addr, from_address=from_addr,
+                   confirmations=confs, confirmed=(confirmed_flag and contract_ret == "SUCCESS"),
+                   status_ok=(contract_ret == "SUCCESS"), all_to=all_to, timestamp=ts)
+
+# ----- USDT BEP20 -----
+def _rpc(method, params, rpc_url=None):
+    urls = [rpc_url] if rpc_url else BSC_RPCS
+    last_err = None
+    for url in urls:
+        try:
+            result = _http_post_json(url, {"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+            if result and "result" in result:
+                return result
+        except Exception as e:
+            last_err = e
+            continue
+    return {}
+
+def _verify_bep20(txhash, target, contract, decimals=18):
+    rcpt = (_rpc("eth_getTransactionReceipt", [txhash]) or {}).get("result")
+    if not rcpt:
+        return _result(ok=True, found=False, error="Transaction receipt not found on BSC")
+    status_ok = str(rcpt.get("status")) == "0x1"
+    logs = rcpt.get("logs") or []
+    amount = 0.0
+    to_addr = None
+    from_addr = None
+    all_to = []
+    for lg in logs:
+        if contract and (lg.get("address", "").lower() != contract.lower()):
+            continue
+        topics = lg.get("topics") or []
+        if not topics or topics[0].lower() != TRANSFER_TOPIC:
+            continue
+        if len(topics) < 3:
+            continue
+        t_from = "0x" + topics[1][-40:]
+        t_to = "0x" + topics[2][-40:]
+        try:
+            val = int(lg.get("data", "0x0"), 16) / float(10 ** decimals)
+        except Exception:
+            val = 0.0
+        all_to.append(t_to)
+        if target and t_to.lower() == target.lower():
+            amount += val
+            to_addr = t_to
+            from_addr = t_from
+        elif not target:
+            amount += val
+            to_addr = t_to
+            from_addr = t_from
+    if to_addr is None and all_to:
+        to_addr = all_to[0]
+    confs = 0
+    ts = None
+    try:
+        tx_block = int(rcpt.get("blockNumber"), 16)
+        tip = int((_rpc("eth_blockNumber", []) or {}).get("result"), 16)
+        confs = max(0, tip - tx_block + 1)
+        blk = (_rpc("eth_getBlockByNumber", [hex(tx_block), False]) or {}).get("result") or {}
+        if blk.get("timestamp"):
+            ts = int(blk["timestamp"], 16)
+    except Exception:
+        confs = 1 if status_ok else 0
+    return _result(ok=True, found=True, amount=amount, to_address=to_addr, from_address=from_addr,
+                   confirmations=confs, confirmed=(status_ok and confs >= 1), status_ok=status_ok,
+                   all_to=all_to, timestamp=ts)
+
+# ========================= address scanners =========================
+def _scan_esplora_addr(base, target, decimals):
+    out = []
+    try:
+        txs = []
+        try:
+            txs += _http_get(base + "/address/" + target + "/txs", timeout=15) or []
+        except Exception as e:
+            print(f"[scan_esplora] confirmed txs error: {e}")
+        try:
+            txs += _http_get(base + "/address/" + target + "/txs/mempool", timeout=15) or []
+        except Exception:
+            pass
+        print(f"[scan_esplora] Got {len(txs)} txs for {target} on {base}")
+        for tx in txs:
+            amt = 0
+            for o in tx.get("vout", []) or []:
+                if o.get("scriptpubkey_address") == target:
+                    amt += int(o.get("value", 0) or 0)
+            if amt <= 0:
+                continue
+            out.append({"hash": tx.get("txid"), "amount": amt / float(10 ** decimals)})
+    except Exception as e:
+        print(f"[scan_esplora] Error: {e}")
+    return out
+
+def _scan_sol_addr(target, decimals):
+    out = []
+    try:
+        res = _http_post_json(SOLANA_RPC, {
+            "jsonrpc": "2.0", "id": 1,
+            "method": "getSignaturesForAddress",
+            "params": [target, {"limit": 15}]
+        })
+        sigs = res.get("result") or []
+        print(f"[scan_sol] Got {len(sigs)} signatures for {target}")
+        for s in sigs:
+            sig = s.get("signature")
+            if sig:
+                out.append({"hash": sig, "amount": None})
+    except Exception as e:
+        print(f"[scan_sol] Error: {e}")
+    return out
+
+def _scan_trc20_addr(target, contract, decimals):
+    out = []
+    try:
+        url = (
+            "https://apilist.tronscanapi.com/api/token_trc20/transfers"
+            "?limit=25&start=0&direction=2&relatedAddress=" + target
+            + "&contractAddress=" + (contract or "")
+        )
+        data = _http_get(url, timeout=15)
+        transfers = data.get("token_transfers") or data.get("data") or []
+        print(f"[scan_trc20] Got {len(transfers)} transfers for {target}")
+        for t in transfers:
+            to_a = t.get("to_address") or t.get("toAddress") or ""
+            if to_a.lower() != target.lower():
+                continue
+            h = t.get("transaction_id") or t.get("hash") or t.get("transactionHash")
+            if h:
+                try:
+                    dec = int(t.get("decimals", decimals) or decimals)
+                    val = float(t.get("quant", "0")) / float(10 ** dec)
+                except Exception:
+                    val = None
+                out.append({"hash": h, "amount": val})
+    except Exception as e:
+        print(f"[scan_trc20] Error: {e}")
+    return out
+
+def _scan_bep20_addr(target, contract, decimals):
+    out = []
+    try:
+        params = {
+            "chainid": "56",
+            "module": "account",
+            "action": "tokentx",
+            "contractaddress": contract,
+            "address": target,
+            "sort": "desc",
+            "offset": "10",
+            "page": "1",
+        }
+        if BSCSCAN_API_KEY:
+            params["apikey"] = BSCSCAN_API_KEY
+
+        url = BSCSCAN_API + "?" + "&".join(f"{k}={v}" for k, v in params.items())
+        data = _http_get(url, timeout=15)
+        print(f"[scan_bep20] BSCScan status={data.get('status')} message={data.get('message')}")
+
+        if data.get("status") == "1" and data.get("result"):
+            for tx in data["result"]:
+                to_addr = tx.get("to", "").lower()
+                if target and to_addr != target.lower():
+                    continue
+                h = tx.get("hash")
+                if h:
+                    try:
+                        val = int(tx.get("value", "0")) / float(10 ** int(tx.get("tokenDecimal", decimals)))
+                    except Exception:
+                        val = None
+                    out.append({"hash": h, "amount": val})
+            if out:
+                return out
+    except Exception as e:
+        print(f"[scan_bep20] BSCScan API error: {e}")
+
+    try:
+        tip = None
+        for rpc_url in BSC_RPCS:
+            try:
+                res = _rpc("eth_blockNumber", [], rpc_url)
+                if res and res.get("result"):
+                    tip = int(res["result"], 16)
+                    break
+            except Exception:
+                continue
+
+        if tip is None:
+            print("[scan_bep20] Could not get tip block")
+            return out
+
+        from_block = max(0, tip - 2000)
+        topic_to = "0x" + target.lower().replace("0x", "").zfill(64)
+
+        for rpc_url in BSC_RPCS:
+            try:
+                logs_res = _http_post_json(rpc_url, {
+                    "jsonrpc": "2.0", "id": 1, "method": "eth_getLogs",
+                    "params": [{
+                        "fromBlock": hex(from_block),
+                        "toBlock": "latest",
+                        "address": contract,
+                        "topics": [TRANSFER_TOPIC, None, topic_to],
+                    }]
+                })
+                error = (logs_res or {}).get("error")
+                if error:
+                    continue
+
+                logs = (logs_res or {}).get("result") or []
+                if logs:
+                    for lg in reversed(logs):
+                        topics = lg.get("topics") or []
+                        if len(topics) < 3:
+                            continue
+                        t_to = "0x" + topics[2][-40:]
+                        if target and t_to.lower() != target.lower():
+                            continue
+                        h = lg.get("transactionHash")
+                        if h:
+                            try:
+                                val = int(lg.get("data", "0x0"), 16) / float(10 ** decimals)
+                            except Exception:
+                                val = None
+                            out.append({"hash": h, "amount": val})
+                    return out
+            except Exception as e:
+                continue
+    except Exception as e:
+        print(f"[scan_bep20] Error: {e}")
+
+    return out
+
+def _scan_blocking(crypto):
+    chain = crypto.get("chain")
+    target = crypto.get("address") or None
+    dec = int(crypto.get("decimals", 8))
+    if not target:
+        return []
+    try:
+        if chain == "btc":
+            return _scan_esplora_addr(ESPLORA_BTC, target, dec)
+        if chain == "ltc":
+            return _scan_esplora_addr(ESPLORA_LTC, target, dec)
+        if chain == "sol":
+            return _scan_sol_addr(target, dec)
+        if chain == "trc20":
+            return _scan_trc20_addr(target, crypto.get("token_contract"), dec)
+        if chain == "bep20":
+            return _scan_bep20_addr(target, crypto.get("token_contract"), dec)
+    except Exception:
+        return []
+    return []
+
+# ========================= verify dispatcher =========================
+def _verify_blocking(crypto, txhash):
+    chain = crypto.get("chain")
+    target = crypto.get("address") or None
+    dec = int(crypto.get("decimals", 8))
+    try:
+        if chain == "btc":
+            return _verify_esplora(ESPLORA_BTC, txhash, target, dec)
+        if chain == "ltc":
+            return _verify_esplora(ESPLORA_LTC, txhash, target, dec)
+        if chain == "sol":
+            return _verify_sol(txhash, target, dec)
+        if chain == "trc20":
+            return _verify_trc20(txhash, target, crypto.get("token_contract"), dec)
+        if chain == "bep20":
+            return _verify_bep20(txhash, target, crypto.get("token_contract"), dec)
+        return _result(ok=False, found=False, error="No detector for chain '%s'" % chain)
+    except urllib.error.HTTPError as e:
+        return _result(ok=False, found=False, error="HTTP %s from blockchain API" % e.code)
+    except Exception as e:
+        return _result(ok=False, found=False, error=str(e))
+
+async def verify_tx(crypto, txhash):
+    return await asyncio.to_thread(_verify_blocking, crypto, txhash)
+
+# ========================= RAW API for animated emojis =========================
+def _build_raw_keyboard(rows_spec):
+    raw_rows = []
+    for row in rows_spec:
+        raw_row = []
+        for btn in row:
+            raw_btn = {
+                "text": btn["text"],
+                "callback_data": btn["callback_data"],
+            }
+            if btn.get("emoji_id"):
+                raw_btn["icon_custom_emoji_id"] = btn["emoji_id"]
+            raw_row.append(raw_btn)
+        raw_rows.append(raw_row)
+    return {"inline_keyboard": raw_rows}
+
+async def raw_send_message(chat_id, text, keyboard_rows, photo=None, parse_mode="HTML"):
+    global TG_API, BOT_TOKEN
+    if not TG_API:
+        TG_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+    
+    if photo:
+        payload = {
+            "chat_id": chat_id,
+            "photo": photo,
+            "caption": text,
+            "parse_mode": parse_mode,
+            "reply_markup": _build_raw_keyboard(keyboard_rows),
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(f"{TG_API}/sendPhoto", json=payload)
+        return r.json()
+    
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": parse_mode,
+        "reply_markup": _build_raw_keyboard(keyboard_rows),
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.post(f"{TG_API}/sendMessage", json=payload)
+    return r.json()
+
+async def raw_edit_message(chat_id, message_id, text, keyboard_rows, photo=None, parse_mode="HTML"):
+    global TG_API, BOT_TOKEN
+    if not TG_API:
+        TG_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+    
+    if photo:
+        payload = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "media": {"type": "photo", "media": photo, "caption": text, "parse_mode": parse_mode},
+            "reply_markup": _build_raw_keyboard(keyboard_rows),
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.post(f"{TG_API}/editMessageMedia", json=payload)
+        return r.json()
+    
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": parse_mode,
+        "reply_markup": _build_raw_keyboard(keyboard_rows),
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.post(f"{TG_API}/editMessageText", json=payload)
+    return r.json()
+
+# ========================= admin panels (using regular buttons - no animated emojis in admin panel) =========================
+def _chain_label(chain):
+    info = SUPPORTED_CHAINS.get(chain)
+    return info["label"] if info else chain
+
+def admin_home_panel():
+    cryptos = all_cryptos()
+    lines = ["<b>CRYPTO PAYMENTS</b>", ""]
+    if not cryptos:
+        lines.append("No cryptocurrencies configured yet.")
+    else:
+        for c in cryptos:
+            state = "ON" if c.get("enabled") else "OFF"
+            addr = c.get("address") or "(no address set)"
+            emoji_info = " 🎨" if c.get("emoji_id") else ""
+            lines.append("<b>" + html.escape(c["name"]) + emoji_info + "</b>  [" + state + "]")
+            lines.append("  " + _chain_label(c.get("chain")))
+            lines.append("  <code>" + html.escape(addr) + "</code>")
+            lines.append("")
+    kb = []
+    for c in cryptos:
+        tag = " (off)" if not c.get("enabled") else ""
+        emoji_tag = " 🎨" if c.get("emoji_id") else ""
+        kb.append([InlineKeyboardButton(c["name"] + emoji_tag + tag, callback_data="pay:c:" + c["id"])])
+    kb.append([InlineKeyboardButton("🔍 Test Transaction", callback_data="pay:test")])
+    kb.append([InlineKeyboardButton("📝 Edit Page Text", callback_data="pay:pickedit")])
+    kb.append([InlineKeyboardButton("🖼️ Payment Image", callback_data="pay:img")])
+    kb.append([InlineKeyboardButton("➕ Add Crypto", callback_data="pay:add")])
+    kb.append([InlineKeyboardButton("❌ Close", callback_data="pay:close")])
+    return NL.join(lines), InlineKeyboardMarkup(kb)
+
+def crypto_panel(cid):
+    c = get_crypto(cid)
+    if not c:
+        return None
+    addr = c.get("address") or "(no address set)"
+    text = (
+        "<b>" + html.escape(c["name"]) + "</b>" + NL
+        + "Chain: " + _chain_label(c.get("chain")) + NL
+        + "Status: " + ("✅ Enabled" if c.get("enabled") else "❌ Disabled") + NL
+        + "Min confirmations: " + str(c.get("min_conf", 1)) + NL
+        + "Animated Emoji: " + ("✅ Set" if c.get("emoji_id") else "❌ Not set") + NL
+        + "Address:" + NL + "<code>" + html.escape(addr) + "</code>"
+    )
+    toggle = "Disable" if c.get("enabled") else "Enable"
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✏️ Edit Address", callback_data="pay:addr:" + cid)],
+        [InlineKeyboardButton("🔢 Edit Min Confirmations", callback_data="pay:conf:" + cid)],
+        [InlineKeyboardButton("🎨 Set Animated Emoji", callback_data="pay:emoji:" + cid)],
+        [InlineKeyboardButton("🔘 " + toggle, callback_data="pay:tgl:" + cid)],
+        [InlineKeyboardButton("🔍 Test This Crypto", callback_data="pay:testc:" + cid)],
+        [InlineKeyboardButton("🗑️ Remove", callback_data="pay:rm:" + cid)],
+        [InlineKeyboardButton("🔙 Back", callback_data="pay:admin")],
+    ])
+    return text, kb
+
+def add_chain_panel():
+    kb = []
+    for chain, info in SUPPORTED_CHAINS.items():
+        kb.append([InlineKeyboardButton(info["label"], callback_data="pay:addchain:" + chain)])
+    kb.append([InlineKeyboardButton("🔙 Back", callback_data="pay:admin")])
+    text = ("<b>➕ ADD CRYPTO</b>" + NL + NL
+            + "Pick the blockchain for the new crypto.")
+    return text, InlineKeyboardMarkup(kb)
+
+def test_pick_panel():
+    kb = []
+    for c in all_cryptos():
+        emoji_tag = " 🎨" if c.get("emoji_id") else ""
+        kb.append([InlineKeyboardButton(c["name"] + emoji_tag + " (" + c.get("chain", "?") + ")",
+                                        callback_data="pay:testc:" + c["id"])])
+    kb.append([InlineKeyboardButton("🔙 Back", callback_data="pay:admin")])
+    text = ("<b>🔍 TEST A TRANSACTION</b>" + NL + NL
+            + "Pick which crypto/chain the hash belongs to, then send the hash.")
+    return text, InlineKeyboardMarkup(kb)
+
+# ========================= render helper for admin =========================
+async def _safe_edit(query, context, text, kb=None):
+    msg = query.message
+    if msg.photo:
+        try:
+            await msg.delete()
+        except Exception:
+            pass
+        await context.bot.send_message(chat_id=msg.chat_id, text=text, reply_markup=kb, parse_mode="HTML")
+        return
+    try:
+        await query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        try:
+            await context.bot.send_message(chat_id=msg.chat_id, text=text, reply_markup=kb, parse_mode="HTML")
+        except Exception:
+            pass
+
+# ========================= test result rendering =========================
+def _format_test_result(crypto, txhash, res):
+    name = html.escape(crypto["name"])
+    lines = ["<b>🔍 TEST RESULT - " + name + "</b>", _chain_label(crypto.get("chain")), ""]
+    lines.append("Hash:" + NL + "<code>" + html.escape(txhash) + "</code>")
+    lines.append("")
+    if not res.get("ok"):
+        lines.append("<b>❌ Could not query the blockchain.</b>")
+        lines.append("Error: " + html.escape(str(res.get("error") or "unknown")))
+        return NL.join(lines)
+    if not res.get("found"):
+        lines.append("<b>❌ Transaction not found</b> on this chain.")
+        if res.get("error"):
+            lines.append(html.escape(str(res.get("error"))))
+        return NL.join(lines)
+    dec = int(crypto.get("decimals", 8))
+    amount = res.get("amount", 0.0)
+    amount_str = _fmt_crypto(amount, dec)
+    if crypto.get("is_usd_stable"):
+        usd = amount
+    else:
+        price = get_usd_price(crypto.get("coingecko_id"))
+        usd = (amount * price) if price else None
+    usd_str = (_fmt_money(usd) if usd is not None else "price unavailable")
+    sym = crypto["name"]
+    lines.append("<b>💰 Amount:</b> " + amount_str + " " + sym + "  (" + ("approx " + usd_str if not crypto.get("is_usd_stable") else usd_str) + ")")
+    lines.append("<b>📤 From:</b> <code>" + html.escape(str(res.get("from_address") or "unknown")) + "</code>")
+    lines.append("<b>📥 To:</b> <code>" + html.escape(str(res.get("to_address") or "unknown")) + "</code>")
+    lines.append("<b>✅ Confirmations:</b> " + str(res.get("confirmations", 0)))
+    lines.append("<b>🔒 Confirmed:</b> " + ("✅ Yes" if res.get("confirmed") else "❌ No"))
+    target = crypto.get("address")
+    if target:
+        to_addr = res.get("to_address") or ""
+        matches = to_addr.lower() == target.lower()
+        lines.append("<b>🎯 Matches your address:</b> " + ("✅ Yes" if matches else "❌ No"))
+    return NL.join(lines)
+
+# ========================= buyer payment flow =========================
+EXPIRED_TEXT = (
+    "⏰ This Order Has Expired. Please Create A New Order To Proceed With Your Purchase." + NL + NL
+    + "If You Have Already Made A Payment And It Was Not Detected, Kindly Contact Support For Assistance."
+)
+VERIFYING_TEXT = (
+    "<b>🔄 We Are Verifying The Transaction In The Blockchain</b>" + NL + NL
+    + "Checking that the exact amount was sent to the correct address and is confirmed on-chain..."
+)
+WAITING_TEXT = "<b>⏳ We Are Waiting For The Blockchain Confirmation</b>"
+INVALID_HASH_TEXT = "❌ Invalid Transaction Hash, Please Enter A Valid Transaction Hash"
+HASH_REQUEST_TEXT = "After Sending The Funds Kindly Send The <b>Transaction Hash</b>"
+
+_HEX64_RE = re.compile(r"^(0x)?[0-9a-fA-F]{64}$")
+_B58_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{43,90}$")
+
+def _looks_like_hash(chain, txhash):
+    if not txhash:
+        return False
+    if chain == "sol":
+        return bool(_B58_RE.match(txhash))
+    return bool(_HEX64_RE.match(txhash))
+
+def get_picker_text():
+    return load_cryptos().get("picker_text") or "💰 Please choose your preferred cryptocurrency for payment"
+
+def set_picker_text(t):
+    data = load_cryptos()
+    data["picker_text"] = t
+    save_cryptos(data)
+
+def get_pay_image():
+    return load_cryptos().get("pay_image")
+
+def set_pay_image(file_id):
+    data = load_cryptos()
+    data["pay_image"] = file_id
+    save_cryptos(data)
+
+def get_wallet_image():
+    return load_cryptos().get("wallet_image") or get_pay_image()
+
+def set_wallet_image(file_id):
+    data = load_cryptos()
+    data["wallet_image"] = file_id
+    save_cryptos(data)
+
+def _is_admin(uid):
+    try:
+        import store
+        return store.is_admin(uid)
+    except Exception:
+        return uid == ADMIN_ID
+
+def _load_orders():
+    if not os.path.exists(ORDERS_FILE):
+        return {}
+    try:
+        with open(ORDERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_orders(d):
+    with open(ORDERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=2)
+
+def increment_order_count(user_id):
+    d = _load_orders()
+    key = str(user_id)
+    d[key] = int(d.get(key, 0)) + 1
+    _save_orders(d)
+    return d[key]
+
+PAY_AMOUNT_TOLERANCE = 0.99
+def _amount_ok(received, required):
+    try:
+        r = float(received)
+        req = float(required)
+        return r + 1e-12 >= req * PAY_AMOUNT_TOLERANCE and r <= req * 1.10
+    except Exception:
+        return False
+
+def _addr_match(a, b):
+    return bool(a) and bool(b) and str(a).strip().lower() == str(b).strip().lower()
+
+def _time_ok(order, res):
+    ts = res.get("timestamp")
+    started = order.get("started_at")
+    if not started:
+        return True
+    if ts is None:
+        return True
+    try:
+        return float(ts) >= (float(started) - TX_TIME_GRACE)
+    except Exception:
+        return True
+
+def _amount_display(order):
+    disp_usd = order.get("charge_usd", order.get("usd"))
+    if order.get("is_stable"):
+        return _fmt_money(disp_usd)
+    return (_fmt_crypto(order["crypto_amount"], order.get("decimals", 8))
+            + " " + order["crypto_name"] + " / " + _fmt_money(disp_usd))
+
+def _mmss(seconds):
+    seconds = max(0, int(seconds))
+    return "%02d:%02d" % (seconds // 60, seconds % 60)
+
+# ========== PICKER SCREEN WITH ANIMATED EMOJIS using RAW API ==========
+def _build_crypto_buttons_raw(cryptos):
+    """Build raw keyboard rows with animated emoji support"""
+    rows = []
+    current_row = []
+    
+    for c in cryptos:
+        button = {
+            "text": c["name"],
+            "callback_data": "pay:pick:" + c["id"],
+        }
+        if c.get("emoji_id"):
+            button["emoji_id"] = c["emoji_id"]
+        current_row.append(button)
+        
+        if len(current_row) >= 2:
+            rows.append(current_row)
+            current_row = []
+    
+    if current_row:
+        rows.append(current_row)
+    
+    return rows
+
+def _picker_screen_raw(is_admin=False, show_wallet=False, wallet_balance=0.0, note=None):
+    """Returns text, keyboard_rows, photo for raw API"""
+    body = get_picker_text()
+    text = "<b>" + html.escape(body) + "</b>"
+    if note:
+        text += NL + NL + note
+    
+    keyboard_rows = _build_crypto_buttons_raw(enabled_cryptos())
+    
+    # Get wallet emoji ID from bot module
+    wallet_emoji_id = None
+    try:
+        import bot
+        wallet_emoji_id = bot.get_action_emoji("use_wallet")
+    except Exception:
+        pass
+    
+    if show_wallet and wallet_balance > 0:
+        wallet_btn = {
+            "text": f"Use Wallet (${wallet_balance:.2f})",
+            "callback_data": "pay:usewallet",
+        }
+        if wallet_emoji_id:
+            wallet_btn["emoji_id"] = wallet_emoji_id
+        keyboard_rows.append([wallet_btn])
+    
+    keyboard_rows.append([{"text": "Cancel", "callback_data": "pay:cancel"}])
+    
+    if is_admin:
+        keyboard_rows.append([
+            {"text": "Edit Text", "callback_data": "pay:pickedit"},
+            {"text": "Change Image", "callback_data": "pay:pickimg"},
+        ])
+    
+    return text, keyboard_rows, get_pay_image()
+
+async def _render_buyer_raw(query, context, text, keyboard_rows, photo=None):
+    """Send/update message using raw API with animated emoji support"""
+    msg = query.message
+    chat_id = msg.chat_id
+    
+    if photo:
+        if msg.photo:
+            try:
+                await raw_edit_message(chat_id, msg.message_id, text, keyboard_rows, photo)
+                return
+            except Exception:
+                pass
+        try:
+            await msg.delete()
+        except Exception:
+            pass
+        await raw_send_message(chat_id, text, keyboard_rows, photo)
+    else:
+        if not msg.photo:
+            try:
+                await raw_edit_message(chat_id, msg.message_id, text, keyboard_rows)
+                return
+            except Exception:
+                pass
+        try:
+            await msg.delete()
+        except Exception:
+            pass
+        await raw_send_message(chat_id, text, keyboard_rows)
+
+async def _edit_live_raw(context, chat_id, msg_id, has_photo, text, keyboard_rows=None):
+    """Edit live message with raw API"""
+    try:
+        if keyboard_rows is None:
+            keyboard_rows = []
+        await raw_edit_message(chat_id, msg_id, text, keyboard_rows)
+    except Exception as e:
+        print(f"[edit_live_raw] Error: {e}")
+
+# ===================== WALLET =====================
+def _wallet_balance(user_id):
+    try:
+        import store
+        return store.wallet_balance(user_id)
+    except Exception:
+        return 0.0
+
+def _wallet_home_screen_raw(user_id):
+    bal = _wallet_balance(user_id)
+    text = "<b>💰 Your current balance is: " + _fmt_money(bal) + "</b>"
+    keyboard_rows = [
+        [{"text": "Deposit", "callback_data": "pay:deposit"}],
+        [{"text": "Back", "callback_data": "pay:walletclose"}]
+    ]
+    return text, keyboard_rows, get_wallet_image()
+
+async def open_wallet(query, context):
+    user_id = query.from_user.id
+    _cancel_task(user_id)
+    context.user_data.pop("pay_order", None)
+    text, keyboard_rows, photo = _wallet_home_screen_raw(user_id)
+    if photo:
+        await raw_send_message(query.message.chat_id, text, keyboard_rows, photo)
+    else:
+        await raw_send_message(query.message.chat_id, text, keyboard_rows)
+    await query.answer()
+
+async def begin_payment_from_cart(query, context):
+    user_id = query.from_user.id
+    try:
+        import cart
+        items = cart._get_cart(user_id)
+        usd = cart._cart_total(items)
+    except Exception:
+        items, usd = [], 0.0
+    if not items:
+        await _render_buyer_raw(query, context, "<b>🛒 Your cart is empty.</b>",
+                                [[{"text": "Back", "callback_data": "cart:open"}]])
+        return
+    await _begin_payment_raw(query, context, [dict(it) for it in items], usd, source="cart")
+
+async def begin_payment_buynow(query, context, item):
+    user_id = query.from_user.id
+    try:
+        import cart
+        usd = cart._line_total(item)
+    except Exception:
+        usd = 0.0
+    await _begin_payment_raw(query, context, [dict(item)], usd, source="buynow")
+
+async def _begin_payment_raw(query, context, items, usd, source="cart"):
+    user_id = query.from_user.id
+    if not items:
+        await _render_buyer_raw(query, context, "<b>❌ Nothing to pay for.</b>",
+                                [[{"text": "Back", "callback_data": "cart:open"}]])
+        return
+    if not enabled_cryptos():
+        await _render_buyer_raw(query, context,
+                                "<b>⚠️ Payment is not available right now.</b>" + NL
+                                + "No cryptocurrency is configured. Please contact support.",
+                                [[{"text": "Back", "callback_data": "cart:open"}]])
+        return
+    label = ", ".join((it.get("title", "Order") + " (x" + str(it.get("qty", 1)) + ")") for it in items)
+    _cancel_task(user_id)
+    context.user_data["pay_order"] = {"state": "choosing", "label": label, "usd": float(usd),
+                                      "charge_usd": float(usd), "wallet_used": 0.0,
+                                      "user_id": user_id, "items": [dict(it) for it in items],
+                                      "source": source}
+    bal = _wallet_balance(user_id)
+    text, keyboard_rows, photo = _picker_screen_raw(_is_admin(user_id), show_wallet=True, wallet_balance=bal)
+    await _render_buyer_raw(query, context, text, keyboard_rows, photo)
+
+async def _on_pick_raw(query, context, cid):
+    user_id = query.from_user.id
+    order = context.user_data.get("pay_order")
+    if not order:
+        await query.answer("Session expired, please start again", show_alert=True)
+        return
+    crypto = get_crypto(cid)
+    if not crypto or not crypto.get("enabled") or not crypto.get("address"):
+        await query.answer("That option is unavailable", show_alert=True)
+        return
+    charge = float(order.get("charge_usd", order.get("usd", 0)))
+    crypto_amount, _price = usd_to_crypto(charge, crypto)
+    if crypto_amount is None:
+        await query.answer("Price feed unavailable, please pick another crypto", show_alert=True)
+        return
+    order.update({
+        "state": "await_payment", "cid": cid,
+        "crypto_name": crypto["name"], "crypto_amount": float(crypto_amount),
+        "address": crypto["address"], "decimals": int(crypto.get("decimals", 8)),
+        "is_stable": bool(crypto.get("is_usd_stable")), "min_conf": int(crypto.get("min_conf", 1)),
+        "deadline": time.time() + PAY_WINDOW_SECONDS,
+        "started_at": time.time(),
+        "chat_id": query.message.chat_id, "msg_id": query.message.message_id,
+        "has_photo": bool(query.message.photo),
+        "hash_requested": False,
+    })
+    _register_pending(order, user_id)
+    context.user_data["pay_order"] = order
+    remaining = int(order["deadline"] - time.time())
+    text = _payment_detail_text(order, remaining)
+    await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], text)
+    await query.answer()
+    _spawn(user_id, _countdown_raw(context, user_id))
+    _spawn_scan(user_id, _auto_scan_raw(context, user_id))
+    await _maybe_request_hashes(context)
+
+def _payment_detail_text(order, remaining):
+    amt = html.escape(_amount_display(order))
+    warn = ("⏰ Kindly Send The Funds In 15 Minutes Else This Transaction Will Expire. "
+            "Ensure That The Transaction Fees Are Paid By You, So That We Receive The Full and Exact Amount.")
+    lines = [
+        "<b>📦 Product :</b> " + html.escape(order.get("label", "Wallet Deposit")),
+        "",
+        "<b>🪙 Crypto :</b> " + html.escape(order["crypto_name"]),
+        "",
+        "<b>💰 Total Amount :</b> " + amt,
+        "",
+        "<b>⏱️ Time Left :</b> " + _mmss(remaining),
+        "",
+        warn,
+        "",
+        "Please Send Exactly <b>" + amt + "</b> To:",
+        "<code>" + html.escape(order["address"]) + "</code>",
+    ]
+    return NL.join(lines)
+
+async def _countdown_raw(context, user_id):
+    try:
+        while True:
+            order = context.user_data.get("pay_order")
+            if not order or order.get("user_id") != user_id or order.get("state") != "await_payment":
+                return
+            remaining = int(order["deadline"] - time.time())
+            if remaining <= 0:
+                await _expire_order_raw(context, user_id)
+                return
+            text = _payment_detail_text(order, remaining)
+            await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], text)
+            await asyncio.sleep(min(PAY_COUNTDOWN_TICK, max(1, remaining)))
+    except asyncio.CancelledError:
+        return
+    except Exception:
+        return
+
+async def _auto_scan_raw(context, user_id):
+    first = True
+    while True:
+        try:
+            await asyncio.sleep(0 if first else SCAN_TICK)
+            first = False
+
+            order = context.user_data.get("pay_order")
+            if not order or order.get("user_id") != user_id or order.get("state") != "await_payment":
+                return
+            if _count_other_pending(order, user_id) > 0:
+                continue
+
+            crypto = get_crypto(order["cid"])
+            if not crypto:
+                continue
+
+            print(f"[auto_scan] Scanning {crypto['name']} address for user {user_id}...")
+            candidates = await asyncio.to_thread(_scan_blocking, crypto)
+            print(f"[auto_scan] Found {len(candidates)} candidate(s) on chain")
+
+            for cand in candidates:
+                h = cand.get("hash")
+                if not h or _hash_used(h):
+                    continue
+
+                print(f"[auto_scan] Verifying candidate hash: {h[:20]}...")
+                res = await verify_tx(crypto, h)
+
+                order = context.user_data.get("pay_order")
+                if not order or order.get("state") != "await_payment":
+                    return
+                if _count_other_pending(order, user_id) > 0:
+                    break
+
+                ok, reason = _validate_autoscan(order, res)
+                if not ok:
+                    print(f"[auto_scan] Hash {h[:20]}... rejected: {reason}")
+                    continue
+
+                print(f"[auto_scan] Payment matched! hash={h[:20]}...")
+                order["hash"] = h
+                _cancel_task(user_id)
+                await _proceed_after_valid_raw(context, user_id, order, res)
+                return
+
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            print(f"[auto_scan] Error for user {user_id}: {e}")
+            continue
+
+async def _proceed_after_valid_raw(context, user_id, order, res):
+    h = order.get("hash")
+    if _hash_used(h):
+        return
+    _mark_hash_used(h)
+
+    if res.get("confirmed") and int(res.get("confirmations", 0)) >= int(order["min_conf"]):
+        await _mark_received_raw(context, user_id, res)
+        return
+
+    order["state"] = "waiting_conf"
+    context.user_data["pay_order"] = order
+    await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], WAITING_TEXT)
+    _spawn(user_id, _wait_for_confirmations_raw(context, user_id))
+
+async def _expire_order_raw(context, user_id):
+    order = context.user_data.get("pay_order")
+    if not order:
+        return
+    _unregister_pending(order, user_id)
+    _cancel_scan(user_id)
+    order["state"] = "expired"
+    try:
+        await context.bot.delete_message(order["chat_id"], order["msg_id"])
+    except Exception:
+        pass
+    try:
+        await context.bot.send_message(order["chat_id"], EXPIRED_TEXT, parse_mode="HTML")
+    except Exception:
+        pass
+    context.user_data.pop("pay_order", None)
+    _ACTIVE_TASKS.pop(user_id, None)
+
+async def _handle_hash_raw(update, context):
+    user_id = update.effective_user.id
+    order = context.user_data.get("pay_order")
+    if not order or order.get("state") != "await_payment":
+        return
+
+    raw = (update.message.text or "").strip()
+    txhash = raw.split()[0] if raw else ""
+    if not txhash:
+        return
+
+    crypto = get_crypto(order["cid"])
+    chain = crypto.get("chain") if crypto else None
+
+    if not _looks_like_hash(chain, txhash):
+        try:
+            await context.bot.send_message(order["chat_id"], INVALID_HASH_TEXT)
+        except Exception:
+            pass
+        return
+
+    if _hash_used(txhash):
+        try:
+            await context.bot.send_message(order["chat_id"], INVALID_HASH_TEXT)
+        except Exception:
+            pass
+        return
+
+    try:
+        verifying_msg = await context.bot.send_message(order["chat_id"], VERIFYING_TEXT, parse_mode="HTML")
+    except Exception:
+        verifying_msg = None
+
+    order["state"] = "verifying"
+    order["hash"] = txhash
+    context.user_data["pay_order"] = order
+
+    res = await verify_tx(crypto, txhash) if crypto else _result(ok=False, found=False, error="crypto removed")
+
+    if verifying_msg:
+        try:
+            await context.bot.delete_message(order["chat_id"], verifying_msg.message_id)
+        except Exception:
+            pass
+
+    ok, reason = _validate(order, res)
+    if not ok:
+        order["state"] = "await_payment"
+        context.user_data["pay_order"] = order
+        try:
+            await context.bot.send_message(order["chat_id"], reason)
+        except Exception:
+            pass
+        remaining = int(order["deadline"] - time.time())
+        if remaining <= 0:
+            await _expire_order_raw(context, user_id)
+        return
+
+    _cancel_task(user_id)
+    _cancel_scan(user_id)
+    await _proceed_after_valid_raw(context, user_id, order, res)
+
+async def _wait_for_confirmations_raw(context, user_id):
+    try:
+        order = context.user_data.get("pay_order")
+        if not order:
+            return
+        crypto = get_crypto(order["cid"])
+        txhash = order.get("hash")
+        for _ in range(PAY_CONF_MAX_POLLS):
+            await asyncio.sleep(PAY_CONF_POLL_TICK)
+            order = context.user_data.get("pay_order")
+            if not order or order.get("state") != "waiting_conf":
+                return
+            res = await verify_tx(crypto, txhash) if crypto else None
+            if not res or not res.get("ok") or not res.get("found"):
+                continue
+            ok, _reason = _validate(order, res)
+            if ok and res.get("confirmed") and int(res.get("confirmations", 0)) >= int(order["min_conf"]):
+                await _mark_received_raw(context, user_id, res)
+                return
+    except asyncio.CancelledError:
+        return
+    except Exception:
+        return
+
+async def _mark_received_raw(context, user_id, res):
+    order = context.user_data.get("pay_order")
+    if not order:
+        return
+    _unregister_pending(order, user_id)
+    _cancel_scan(user_id)
+    order["state"] = "done"
+    try:
+        await context.bot.delete_message(order["chat_id"], order["msg_id"])
+    except Exception:
+        pass
+
+    if order.get("kind") == "deposit":
+        amount = float(order.get("usd", 0) or 0)
+        new_bal = amount
+        try:
+            import store
+            new_bal = store.wallet_add(user_id, amount)
+        except Exception:
+            pass
+        msg = (
+            "<b>✅ We Have Received The Payment</b>" + NL + NL
+            + _fmt_money(amount) + " has been added to your wallet." + NL + NL
+            + "💰 Your current balance is: <b>" + _fmt_money(new_bal) + "</b>"
+        )
+        try:
+            await context.bot.send_message(order["chat_id"], msg, parse_mode="HTML")
+        except Exception:
+            pass
+        context.user_data.pop("pay_order", None)
+        _ACTIVE_TASKS.pop(user_id, None)
+        return
+
+    wallet_used = float(order.get("wallet_used", 0) or 0)
+    if wallet_used > 0:
+        try:
+            import store
+            store.wallet_deduct(user_id, wallet_used)
+        except Exception:
+            pass
+    await _finish_purchase_raw(context, user_id, order)
+
+async def _finish_purchase_raw(context, user_id, order):
+    count = increment_order_count(user_id)
+    order_id = str(user_id) + str(count)
+    msg = (
+        "<b>✅ Payment Received Successfully!</b>" + NL + NL
+        + "<b>🆔 Order ID :</b> " + html.escape(order_id) + NL + NL
+        + "📦 Your Product Will Be Delivered Shortly" + NL + NL
+        + "🙏 Thank You For Shopping With Us"
+    )
+    try:
+        await context.bot.send_message(order["chat_id"], msg, parse_mode="HTML")
+    except Exception:
+        pass
+    try:
+        import cart
+        if order.get("source") != "buynow":
+            cart._set_cart(user_id, [])
+    except Exception:
+        pass
+    try:
+        import orders, store
+        record = {
+            "order_id": order_id,
+            "user_id": user_id,
+            "username": store.get_username(user_id),
+            "items": order.get("items", []),
+            "crypto": order.get("crypto_name") or ("Wallet" if order.get("wallet_full") else None),
+            "hash": order.get("hash"),
+            "amount": float(order.get("usd", 0) or 0),
+        }
+        await orders.send_new_order(record)
+    except Exception:
+        pass
+    context.user_data.pop("pay_order", None)
+    _ACTIVE_TASKS.pop(user_id, None)
+
+async def _maybe_request_hashes(context):
+    groups = {}
+    for uid, o in list(_ACTIVE_ORDERS.items()):
+        if o.get("state") == "await_payment":
+            groups.setdefault(_pending_key(o), []).append(o)
+    for key, members in groups.items():
+        if len(members) < 2:
+            continue
+        for o in members:
+            if o.get("hash_requested"):
+                continue
+            try:
+                await context.bot.send_message(o["chat_id"], HASH_REQUEST_TEXT, parse_mode="HTML")
+                o["hash_requested"] = True
+            except Exception:
+                pass
+
+def _cancel_task(user_id):
+    t = _ACTIVE_TASKS.pop(user_id, None)
+    try:
+        current = asyncio.current_task()
+    except Exception:
+        current = None
+    if t and t is not current and not t.done():
+        t.cancel()
+
+def _spawn(user_id, coro):
+    _cancel_task(user_id)
+    try:
+        _ACTIVE_TASKS[user_id] = asyncio.create_task(coro)
+    except RuntimeError:
+        pass
+
+def _cancel_scan(user_id):
+    t = _SCAN_TASKS.pop(user_id, None)
+    try:
+        current = asyncio.current_task()
+    except Exception:
+        current = None
+    if t and t is not current and not t.done():
+        t.cancel()
+
+def _spawn_scan(user_id, coro):
+    _cancel_scan(user_id)
+    try:
+        _SCAN_TASKS[user_id] = asyncio.create_task(coro)
+    except RuntimeError:
+        pass
+
+def _register_pending(order, user_id):
+    _ACTIVE_ORDERS[user_id] = order
+    _PENDING.setdefault(_pending_key(order), set()).add(user_id)
+
+def _unregister_pending(order, user_id):
+    _ACTIVE_ORDERS.pop(user_id, None)
+    key = _pending_key(order) if order else None
+    if key and key in _PENDING:
+        _PENDING[key].discard(user_id)
+        if not _PENDING[key]:
+            _PENDING.pop(key, None)
+
+def _validate_autoscan(order, res):
+    if not res or not res.get("ok"):
+        return False, "blockchain unreachable"
+    if not res.get("found"):
+        return False, "tx not found"
+    if not res.get("status_ok"):
+        return False, "tx unsuccessful on-chain"
+    if not _addr_match(res.get("to_address"), order["address"]):
+        return False, "wrong destination address"
+    if not _amount_ok(res.get("amount"), order["crypto_amount"]):
+        return False, f"amount mismatch (got {res.get('amount')}, need {order['crypto_amount']})"
+    ts = res.get("timestamp")
+    started = order.get("started_at")
+    if ts is not None and started is not None:
+        try:
+            if float(ts) < (float(started) - TX_TIME_GRACE):
+                return False, f"tx too old"
+        except Exception:
+            pass
+    return True, None
+
+def _validate(order, res):
+    if not res or not res.get("ok"):
+        return False, "We could not reach the blockchain right now. Please send the Transaction Hash again."
+    if not res.get("found"):
+        return False, INVALID_HASH_TEXT
+    if not res.get("status_ok"):
+        return False, "That transaction looks unsuccessful on-chain."
+    if not _addr_match(res.get("to_address"), order["address"]):
+        return False, "That payment did not go to our address."
+    if not _amount_ok(res.get("amount"), order["crypto_amount"]):
+        return False, ("The amount received does not match. Please send exactly "
+                       + _amount_display(order) + " and then send the hash again.")
+    if not _time_ok(order, res):
+        return False, INVALID_HASH_TEXT
+    return True, None
+
+# ========================= DEPOSIT HANDLERS =========================
+async def _handle_deposit_amount(update, context):
+    order = context.user_data.get("pay_order")
+    if not order or order.get("state") != "await_deposit_amount":
+        return
+    amt = _parse_money(update.message.text)
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
+    if amt is None:
+        try:
+            await context.bot.send_message(order["chat_id"], "Please enter a valid amount (example: 10 or $10).")
+        except Exception:
+            pass
+        return
+    order["usd"] = float(amt)
+    order["charge_usd"] = float(amt)
+    order["label"] = "Wallet Deposit"
+    order["state"] = "choosing"
+    context.user_data["pay_order"] = order
+    note = "💰 Depositing: <b>" + _fmt_money(amt) + "</b>"
+    text, keyboard_rows, photo = _picker_screen_raw(_is_admin(order["user_id"]), note=note)
+    await _replace_msg_raw(context, order, text, keyboard_rows, photo)
+
+async def _handle_wallet_amount(update, context):
+    order = context.user_data.get("pay_order")
+    if not order or order.get("state") != "await_wallet_amount":
+        return
+    user_id = order["user_id"]
+    amt = _parse_money(update.message.text)
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
+    bal = _wallet_balance(user_id)
+    total = float(order.get("usd", 0))
+    if amt is None or amt <= 0:
+        try:
+            await context.bot.send_message(order["chat_id"], "Please enter a valid amount (example: 1 or $1).")
+        except Exception:
+            pass
+        return
+    use = min(amt, bal, total)
+    order["wallet_used"] = round(use, 2)
+    order["charge_usd"] = round(max(0.0, total - use), 2)
+    if order["charge_usd"] <= 0:
+        order["wallet_full"] = True
+        order["state"] = "done"
+        context.user_data["pay_order"] = order
+        try:
+            import store
+            store.wallet_deduct(user_id, order["wallet_used"])
+        except Exception:
+            pass
+        await _finish_purchase_raw(context, user_id, order)
+        return
+    order["state"] = "choosing"
+    context.user_data["pay_order"] = order
+    note = ("💳 Wallet applied: <b>" + _fmt_money(order["wallet_used"]) + "</b>" + NL
+            + "💰 Remaining to pay: <b>" + _fmt_money(order["charge_usd"]) + "</b>")
+    text, keyboard_rows, photo = _picker_screen_raw(_is_admin(user_id), note=note)
+    await _replace_msg_raw(context, order, text, keyboard_rows, photo)
+
+def _parse_money(text):
+    try:
+        import store
+        return store.parse_money(text)
+    except Exception:
+        pass
+    import re as _re
+    if not text:
+        return None
+    m = _re.search(r"[-+]?\d*\.?\d+", str(text).replace(",", "").replace("$", ""))
+    if not m:
+        return None
+    try:
+        v = float(m.group(0))
+    except Exception:
+        return None
+    return v if v > 0 else None
+
+async def _replace_msg_raw(context, order, text, keyboard_rows, photo=None):
+    chat_id = order.get("chat_id")
+    old_id = order.get("msg_id")
+    if old_id:
+        try:
+            await context.bot.delete_message(chat_id, old_id)
+        except Exception:
+            pass
+    if photo is not None:
+        m = await raw_send_message(chat_id, text, keyboard_rows, photo)
+    else:
+        m = await raw_send_message(chat_id, text, keyboard_rows)
+    if isinstance(m, dict) and m.get("result"):
+        order["msg_id"] = m["result"]["message_id"]
+    order["has_photo"] = photo is not None
+    return m
+
+# ========================= CALLBACKS =========================
+async def _on_callback(update, context):
+    query = update.callback_query
+    if query is None:
+        return
+    data = query.data or ""
+    if not data.startswith("pay:"):
+        return
+    user_id = query.from_user.id
+    action = data[4:]
+
+    if action.startswith("pick:"):
+        await _on_pick_raw(query, context, action[5:])
+        raise ApplicationHandlerStop
+
+    if action == "cancel":
+        _cancel_task(user_id)
+        _cancel_scan(user_id)
+        _ord = context.user_data.get("pay_order")
+        if _ord:
+            _unregister_pending(_ord, user_id)
+        context.user_data.pop("pay_order", None)
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        await query.answer("Cancelled")
+        raise ApplicationHandlerStop
+
+    if action == "walletclose":
+        context.user_data.pop("pay_order", None)
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action == "wallet":
+        await open_wallet(query, context)
+        raise ApplicationHandlerStop
+
+    if action == "deposit":
+        if not enabled_cryptos():
+            await query.answer("Deposits are unavailable right now.", show_alert=True)
+            raise ApplicationHandlerStop
+        context.user_data["pay_order"] = {
+            "state": "await_deposit_amount", "kind": "deposit", "user_id": user_id,
+            "chat_id": query.message.chat_id, "msg_id": query.message.message_id,
+            "has_photo": bool(query.message.photo),
+        }
+        await _edit_live_raw(context, query.message.chat_id, query.message.message_id,
+                             bool(query.message.photo),
+                             "<b>💰 How much would you like to deposit? (USD)</b>")
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action == "usewallet":
+        order = context.user_data.get("pay_order")
+        if not order:
+            await query.answer("Session expired, please start again", show_alert=True)
+            raise ApplicationHandlerStop
+        order["chat_id"] = query.message.chat_id
+        order["msg_id"] = query.message.message_id
+        order["has_photo"] = bool(query.message.photo)
+        bal = _wallet_balance(user_id)
+        total = float(order.get("usd", 0))
+        if bal <= 0:
+            await query.answer("Your wallet is empty.", show_alert=True)
+            raise ApplicationHandlerStop
+        if bal >= total:
+            order["state"] = "wallet_choice"
+            context.user_data["pay_order"] = order
+            text = f"<b>💰 Your current balance is: {_fmt_money(bal)}</b>"
+            keyboard_rows = [
+                [{"text": "Use Wallet Balance", "callback_data": "pay:walletfull"}],
+                [{"text": "Use Crypto", "callback_data": "pay:usecrypto"}],
+                [{"text": "Cancel", "callback_data": "pay:cancel"}],
+            ]
+            await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], text, keyboard_rows)
+            await query.answer()
+            raise ApplicationHandlerStop
+        order["state"] = "await_wallet_amount"
+        context.user_data["pay_order"] = order
+        msg = ("<b>💰 Your current balance is: " + _fmt_money(bal) + "</b>" + NL
+               + "How much would you like to use?")
+        await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], msg)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action == "walletfull":
+        order = context.user_data.get("pay_order")
+        if not order:
+            await query.answer("Session expired, please start again", show_alert=True)
+            raise ApplicationHandlerStop
+        order["chat_id"] = query.message.chat_id
+        order["msg_id"] = query.message.message_id
+        order["has_photo"] = bool(query.message.photo)
+        bal = _wallet_balance(user_id)
+        total = float(order.get("usd", 0))
+        if bal + 1e-9 < total:
+            await query.answer("Not enough wallet balance.", show_alert=True)
+            raise ApplicationHandlerStop
+        order["wallet_used"] = total
+        order["wallet_full"] = True
+        order["state"] = "done"
+        context.user_data["pay_order"] = order
+        try:
+            import store
+            store.wallet_deduct(user_id, total)
+        except Exception:
+            pass
+        await query.answer()
+        await _finish_purchase_raw(context, user_id, order)
+        raise ApplicationHandlerStop
+
+    if action == "usecrypto":
+        order = context.user_data.get("pay_order")
+        if not order:
+            await query.answer("Session expired, please start again", show_alert=True)
+            raise ApplicationHandlerStop
+        order["chat_id"] = query.message.chat_id
+        order["msg_id"] = query.message.message_id
+        order["has_photo"] = bool(query.message.photo)
+        order["state"] = "choosing"
+        context.user_data["pay_order"] = order
+        note = None
+        if float(order.get("wallet_used", 0)) > 0:
+            note = ("💳 Wallet applied: <b>" + _fmt_money(order["wallet_used"]) + "</b>" + NL
+                    + "💰 Remaining to pay: <b>" + _fmt_money(order["charge_usd"]) + "</b>")
+        text, keyboard_rows, photo = _picker_screen_raw(_is_admin(user_id), note=note)
+        await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], text, keyboard_rows)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    # ----- admin-only below -----
+    if user_id != ADMIN_ID:
+        await query.answer("Not allowed", show_alert=True)
+        raise ApplicationHandlerStop
+
+    if action == "admin":
+        context.user_data.pop("pay_flow", None)
+        text, kb = admin_home_panel()
+        await _safe_edit(query, context, text, kb)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action == "close":
+        context.user_data.pop("pay_flow", None)
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action == "add":
+        context.user_data.pop("pay_flow", None)
+        text, kb = add_chain_panel()
+        await _safe_edit(query, context, text, kb)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action == "img":
+        context.user_data["pay_flow"] = {"step": "set_pay_image"}
+        cur = "yes" if get_pay_image() else "no"
+        await _safe_edit(query, context,
+                         "🖼️ Send the IMAGE buyers will see on the payment screens." + NL
+                         + "Currently set: " + cur + NL
+                         + "(send 0 to remove it)")
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action == "pickedit":
+        context.user_data["pay_flow"] = {"step": "edit_picker_text"}
+        await _safe_edit(query, context,
+                         "📝 Send the new TEXT for the crypto-choosing page:" + NL
+                         + "Current: " + get_picker_text())
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action == "pickimg":
+        context.user_data["pay_flow"] = {"step": "set_pay_image"}
+        cur = "yes" if get_pay_image() else "no"
+        await _safe_edit(query, context,
+                         "🖼️ Send the IMAGE for the crypto-choosing page." + NL
+                         + "Currently set: " + cur + NL
+                         + "(send 0 to remove it)")
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action.startswith("addchain:"):
+        chain = action[len("addchain:"):]
+        if chain not in SUPPORTED_CHAINS:
+            await query.answer("Unknown chain", show_alert=True)
+            raise ApplicationHandlerStop
+        context.user_data["pay_flow"] = {"step": "add_name", "chain": chain}
+        await _safe_edit(query, context,
+                         "📛 Send a NAME for this crypto (example: BTC, USDT):" + NL
+                         + "Chain: " + _chain_label(chain))
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action.startswith("c:"):
+        cid = action[2:]
+        res = crypto_panel(cid)
+        if not res:
+            await query.answer("Not found", show_alert=True)
+            raise ApplicationHandlerStop
+        text, kb = res
+        await _safe_edit(query, context, text, kb)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action.startswith("addr:"):
+        cid = action[5:]
+        context.user_data["pay_flow"] = {"step": "edit_addr", "id": cid}
+        c = get_crypto(cid)
+        cur = (c.get("address") if c else "") or "(none)"
+        await _safe_edit(query, context,
+                         "📤 Send the new DEPOSIT ADDRESS for " + (c["name"] if c else cid) + ":" + NL
+                         + "Current: " + cur)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action.startswith("conf:"):
+        cid = action[5:]
+        context.user_data["pay_flow"] = {"step": "edit_conf", "id": cid}
+        await _safe_edit(query, context,
+                         "🔢 Send the MIN CONFIRMATIONS required (whole number, example: 2):")
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action.startswith("emoji:"):
+        cid = action[6:]
+        context.user_data["pay_flow"] = {"step": "set_crypto_emoji", "id": cid}
+        c = get_crypto(cid)
+        cur = "Set" if c.get("emoji_id") else "Not set"
+        await _safe_edit(query, context,
+                         f"🎨 SET ANIMATED EMOJI for {c['name'] if c else cid}\n\n"
+                         f"Current: {cur}\n\n"
+                         f"How to set animated emoji:\n"
+                         f"1. Send a message with the animated emoji\n"
+                         f"2. Reply to that message with /getid\n"
+                         f"3. Copy the emoji ID (looks like: CAACAgIAAxkBAA...)\n"
+                         f"4. Send that ID here\n\n"
+                         f"Or send 0 to REMOVE the current emoji.")
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action.startswith("tgl:"):
+        cid = action[4:]
+        c = get_crypto(cid)
+        if c:
+            c["enabled"] = not bool(c.get("enabled"))
+            _save_crypto(c)
+        res = crypto_panel(cid)
+        if res:
+            text, kb = res
+            await _safe_edit(query, context, text, kb)
+        await query.answer("Updated")
+        raise ApplicationHandlerStop
+
+    if action.startswith("rmok:"):
+        cid = action[5:]
+        data_all = load_cryptos()
+        data_all["cryptos"] = [c for c in data_all["cryptos"] if c["id"] != cid]
+        save_cryptos(data_all)
+        text, kb = admin_home_panel()
+        await _safe_edit(query, context, "Removed." + NL + NL + text, kb)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action.startswith("rm:"):
+        cid = action[3:]
+        c = get_crypto(cid)
+        nm = c["name"] if c else "?"
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Yes, remove", callback_data="pay:rmok:" + cid)],
+            [InlineKeyboardButton("❌ No, go back", callback_data="pay:c:" + cid)],
+        ])
+        await _safe_edit(query, context, "🗑️ Remove '" + nm + "' from accepted cryptos?", kb)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action == "test":
+        context.user_data.pop("pay_flow", None)
+        text, kb = test_pick_panel()
+        await _safe_edit(query, context, text, kb)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action.startswith("testc:"):
+        cid = action[6:]
+        c = get_crypto(cid)
+        if not c:
+            await query.answer("Not found", show_alert=True)
+            raise ApplicationHandlerStop
+        context.user_data["pay_flow"] = {"step": "test_hash", "id": cid}
+        await _safe_edit(query, context,
+                         "<b>🔍 TEST - " + html.escape(c["name"]) + "</b>" + NL
+                         + _chain_label(c.get("chain")) + NL + NL
+                         + "Send the TRANSACTION HASH to look up:")
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    await query.answer()
+    raise ApplicationHandlerStop
+
+# ========================= TEXT INPUT =========================
+async def _on_text(update, context):
+    order = context.user_data.get("pay_order")
+    if order:
+        st = order.get("state")
+        if st == "await_deposit_amount":
+            await _handle_deposit_amount(update, context)
+            raise ApplicationHandlerStop
+        if st == "await_wallet_amount":
+            await _handle_wallet_amount(update, context)
+            raise ApplicationHandlerStop
+        if st == "await_payment":
+            await _handle_hash_raw(update, context)
+            raise ApplicationHandlerStop
+        if st in ("verifying", "waiting_conf", "done"):
+            try:
+                await update.message.reply_text("⏳ Please wait — we are processing your transaction.")
+            except Exception:
+                pass
+            raise ApplicationHandlerStop
+        raise ApplicationHandlerStop
+
+    flow = context.user_data.get("pay_flow")
+    if not flow:
+        return
+    if update.effective_user.id != ADMIN_ID:
+        context.user_data.pop("pay_flow", None)
+        return
+    step = flow.get("step")
+    text = (update.message.text or "").strip()
+
+    if step == "set_crypto_emoji":
+        cid = flow["id"]
+        c = get_crypto(cid)
+        if not c:
+            context.user_data.pop("pay_flow", None)
+            await update.message.reply_text("Crypto not found.")
+            raise ApplicationHandlerStop
+        
+        if text == "0":
+            c["emoji_id"] = None
+            _save_crypto(c)
+            context.user_data.pop("pay_flow", None)
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="pay:c:" + cid)]])
+            await update.message.reply_text("✅ Emoji removed from crypto.", reply_markup=kb)
+        else:
+            c["emoji_id"] = text
+            _save_crypto(c)
+            context.user_data.pop("pay_flow", None)
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="pay:c:" + cid)]])
+            await update.message.reply_text(f"✅ Animated emoji set for {c['name']}!\n\nID: {text}", reply_markup=kb)
+        raise ApplicationHandlerStop
+
+    if step == "set_pay_image":
+        if text == "0":
+            set_pay_image(None)
+            context.user_data.pop("pay_flow", None)
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="pay:admin")]])
+            await update.message.reply_text("🖼️ Payment image removed.", reply_markup=kb)
+        else:
+            await update.message.reply_text("Please send a photo, or send 0 to remove it.")
+        raise ApplicationHandlerStop
+
+    if step == "edit_picker_text":
+        set_picker_text(text)
+        context.user_data.pop("pay_flow", None)
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="pay:admin")]])
+        await update.message.reply_text("✅ Crypto-choosing page text updated.", reply_markup=kb)
+        raise ApplicationHandlerStop
+
+    if step == "add_name":
+        chain = flow["chain"]
+        info = SUPPORTED_CHAINS.get(chain, {})
+        new = {
+            "id": uuid.uuid4().hex[:8],
+            "name": text,
+            "chain": chain,
+            "address": "",
+            "coingecko_id": info.get("coingecko"),
+            "decimals": info.get("decimals", 8),
+            "enabled": False,
+            "min_conf": 1,
+            "is_usd_stable": info.get("stable", False),
+            "token_contract": info.get("token"),
+            "emoji_id": None,
+        }
+        data_all = load_cryptos()
+        data_all["cryptos"].append(new)
+        save_cryptos(data_all)
+        context.user_data["pay_flow"] = {"step": "edit_addr", "id": new["id"]}
+        await update.message.reply_text(
+            "✅ Added '" + text + "'. Now send its DEPOSIT ADDRESS:"
+        )
+        raise ApplicationHandlerStop
+
+    if step == "edit_addr":
+        cid = flow["id"]
+        c = get_crypto(cid)
+        if c:
+            c["address"] = text
+            if text:
+                c["enabled"] = True
+            _save_crypto(c)
+        context.user_data.pop("pay_flow", None)
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="pay:c:" + cid)]])
+        await update.message.reply_text("✅ Address saved and crypto enabled.", reply_markup=kb)
+        raise ApplicationHandlerStop
+
+    if step == "edit_conf":
+        cid = flow["id"]
+        if not text.isdigit():
+            await update.message.reply_text("Please send a whole number (example: 2).")
+            raise ApplicationHandlerStop
+        c = get_crypto(cid)
+        if c:
+            c["min_conf"] = int(text)
+            _save_crypto(c)
+        context.user_data.pop("pay_flow", None)
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="pay:c:" + cid)]])
+        await update.message.reply_text("✅ Min confirmations updated.", reply_markup=kb)
+        raise ApplicationHandlerStop
+
+    if step == "test_hash":
+        cid = flow["id"]
+        c = get_crypto(cid)
+        context.user_data.pop("pay_flow", None)
+        if not c:
+            await update.message.reply_text("That crypto no longer exists.")
+            raise ApplicationHandlerStop
+        txhash = text.split()[0] if text else ""
+        wait = await update.message.reply_text(
+            "🔄 Looking up the transaction on the blockchain, please wait...", parse_mode="HTML")
+        res = await verify_tx(c, txhash)
+        out = _format_test_result(c, txhash, res)
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔍 Test Another", callback_data="pay:test")],
+            [InlineKeyboardButton("🔙 Back", callback_data="pay:admin")],
+        ])
+        try:
+            await wait.edit_text(out, reply_markup=kb, parse_mode="HTML")
+        except Exception:
+            await update.message.reply_text(out, reply_markup=kb, parse_mode="HTML")
+        raise ApplicationHandlerStop
+
+    return
+
+# ========================= PHOTO INPUT =========================
+async def _on_photo(update, context):
+    flow = context.user_data.get("pay_flow")
+    if not flow or flow.get("step") != "set_pay_image":
+        return
+    if update.effective_user.id != ADMIN_ID:
+        return
+    file_id = update.message.photo[-1].file_id
+    set_pay_image(file_id)
+    context.user_data.pop("pay_flow", None)
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="pay:admin")]])
+    await update.message.reply_text("✅ Payment image updated.", reply_markup=kb)
+    raise ApplicationHandlerStop
+
+# ========================= /payments COMMAND =========================
+async def _cmd_payments(update, context):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    context.user_data.pop("pay_flow", None)
+    text, kb = admin_home_panel()
+    await update.message.reply_text(text, reply_markup=kb, parse_mode="HTML")
+
+# ========================= SETUP =========================
+def setup(application, admin_id, bot_token=None):
+    global ADMIN_ID, BOT_TOKEN, TG_API
+    ADMIN_ID = admin_id
+    BOT_TOKEN = bot_token
+    if BOT_TOKEN:
+        TG_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+    
+    application.add_handler(CallbackQueryHandler(_on_callback), group=-3)
+    application.add_handler(MessageHandler(filters.PHOTO, _on_photo), group=-3)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _on_text), group=-3)
+    application.add_handler(CommandHandler("payments", _cmd_payments))
+    
+    n = len(all_cryptos())
+    print(f"Crypto Payments module loaded. {n} cryptos configured. Animated emoji support ready!")
