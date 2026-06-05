@@ -1,6 +1,11 @@
 """
 Premium Villa - Social Media Services module (smm.py)
 Wire into bot.py with:  import smm   and   smm.setup(app, ADMIN_ID)
+
+CHANGES vs original:
+  - Dedicated question screen (like TG Premium) shown after qty entry
+  - qty_image now displayed on the quantity prompt screen
+  - Custom emoji support on all SMM buttons via raw Telegram API
 """
 
 import os
@@ -19,8 +24,7 @@ from telegram.ext import (
 )
 
 # =====================================================================
-# RAPIDAPI INSTAGRAM CHECK  (reliable, free tier, auto key-rotation)
-# Set PRIVATE_CHECK_ENABLED = True to turn detection on.
+# RAPIDAPI INSTAGRAM CHECK
 # =====================================================================
 RAPIDAPI_KEYS = [
     "7b5d6b21c0msh57cf99440508089p1f9896jsn06a96f563bea",
@@ -50,13 +54,13 @@ _KEY_INDEX = 0
 PRIVATE_CHECK_ENABLED = False
 
 try:
-    import httpx  # noqa: F401
+    import httpx
     HTTPX_AVAILABLE = True
 except Exception:
     HTTPX_AVAILABLE = False
 
 try:
-    import instaloader  # noqa: F401
+    import instaloader
     IG_AVAILABLE = True
 except Exception:
     IG_AVAILABLE = False
@@ -67,10 +71,80 @@ SMM_FILE = os.path.join(BASE_DIR, "smmdata.json")
 
 ADMIN_ID = 0
 CAT_ID = "smm"
+BOT_TOKEN = ""  # set in setup()
 
 _IG_SEM = asyncio.Semaphore(3)
 _IG_SLOT_WAIT = 2
 _IG_TIMEOUT = 10
+
+TG_API_BASE = ""  # set in setup()
+
+# =====================================================================
+# RAW API HELPERS (enables custom emoji on buttons)
+# =====================================================================
+def _build_raw_keyboard(rows_spec):
+    """rows_spec: list of list of dicts with keys: text, callback_data, emoji_id (optional)"""
+    raw_rows = []
+    for row in rows_spec:
+        raw_row = []
+        for btn in row:
+            raw_btn = {
+                "text": btn["text"],
+                "callback_data": btn["callback_data"],
+            }
+            if btn.get("emoji_id"):
+                raw_btn["icon_custom_emoji_id"] = btn["emoji_id"]
+            raw_row.append(raw_btn)
+        raw_rows.append(raw_row)
+    return {"inline_keyboard": raw_rows}
+
+async def _raw_send_message(chat_id, text, keyboard_rows, photo=None, parse_mode="HTML"):
+    if photo:
+        return await _raw_send_photo(chat_id, photo, text, keyboard_rows, parse_mode)
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": parse_mode,
+        "reply_markup": _build_raw_keyboard(keyboard_rows),
+    }
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{TG_API_BASE}/sendMessage", json=payload)
+    return r.json()
+
+async def _raw_send_photo(chat_id, photo, caption, keyboard_rows, parse_mode="HTML"):
+    payload = {
+        "chat_id": chat_id,
+        "photo": photo,
+        "caption": caption,
+        "parse_mode": parse_mode,
+        "reply_markup": _build_raw_keyboard(keyboard_rows),
+    }
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{TG_API_BASE}/sendPhoto", json=payload)
+    return r.json()
+
+async def _raw_edit_message_text(chat_id, message_id, text, keyboard_rows, parse_mode="HTML"):
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": parse_mode,
+        "reply_markup": _build_raw_keyboard(keyboard_rows),
+    }
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{TG_API_BASE}/editMessageText", json=payload)
+    return r.json()
+
+async def _raw_edit_message_media(chat_id, message_id, photo, caption, keyboard_rows, parse_mode="HTML"):
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "media": {"type": "photo", "media": photo, "caption": caption, "parse_mode": parse_mode},
+        "reply_markup": _build_raw_keyboard(keyboard_rows),
+    }
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{TG_API_BASE}/editMessageMedia", json=payload)
+    return r.json()
 
 # =====================================================================
 # DEFAULT DATA
@@ -101,7 +175,7 @@ def _default_data():
             ),
         }
 
-    acct_prompt = "Please Enter Your Instagram Profile Username or Link"
+    acct_prompt = "Please Enter Your Instagram Username or Profile Link"
     post_prompt = "Please Enter Your Instagram Post Link"
     return {
         "root": {
@@ -122,7 +196,7 @@ def _default_data():
                         "Views", 2.0, 500, "post", post_prompt, False),
                     svc("igc", "Post Comments", "Instagram High Quality Comments",
                         "Comments", 20.0, 20, "post", post_prompt, False),
-                    svc("igs", "Story Views", "Instagram High Quality Story Views",
+                    svc("igs", "Story Views", "Instagram Story Views",
                         "Story Views", 3.0, 100, "account", acct_prompt, True),
                 ],
             }
@@ -139,17 +213,13 @@ def _load():
         data = json.load(f)
     changed = False
     if not isinstance(data, dict):
-        data = _default_data()
-        changed = True
+        data = _default_data(); changed = True
     if "platforms" not in data or not isinstance(data["platforms"], list):
-        data["platforms"] = _default_data()["platforms"]
-        changed = True
+        data["platforms"] = _default_data()["platforms"]; changed = True
     if not data["platforms"]:
-        data["platforms"] = _default_data()["platforms"]
-        changed = True
+        data["platforms"] = _default_data()["platforms"]; changed = True
     if "root" not in data or not isinstance(data.get("root"), dict):
-        data["root"] = _default_data()["root"]
-        changed = True
+        data["root"] = _default_data()["root"]; changed = True
     if changed:
         _save(data)
     return data
@@ -309,7 +379,7 @@ async def _check_private(username):
             pass
 
 # =====================================================================
-# render helpers
+# render helpers (standard python-telegram-bot)
 # =====================================================================
 async def _render(query, context, caption, keyboard, photo=None):
     msg = query.message
@@ -386,24 +456,51 @@ async def _safe_edit(query, context, text, reply_markup=None):
         pass
 
 # =====================================================================
+# RAW render helpers (support custom emoji on buttons)
+# =====================================================================
+async def _raw_render_to(context, chat_id, msg_id, had_photo, caption, rows, photo=None):
+    """Like _render_to but accepts raw rows (list of list of dicts) for emoji support."""
+    want_photo = photo is not None
+    if msg_id is not None:
+        try:
+            if want_photo and had_photo:
+                await _raw_edit_message_media(chat_id, msg_id, photo, caption)
+                return
+            if (not want_photo) and (not had_photo):
+                await _raw_edit_message_text(chat_id, msg_id, caption, rows)
+                return
+        except Exception:
+            pass
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+        except Exception:
+            pass
+    if want_photo:
+        await _raw_send_photo(chat_id, photo, caption, rows)
+    else:
+        await _raw_send_message(chat_id, caption, rows)
+
+# =====================================================================
 # customer screens
 # =====================================================================
-def _root_screen(user_id):
+def _root_screen_rows(user_id):
+    """Returns (caption, raw_rows, photo) — raw_rows support custom emoji."""
     data = _load()
     cfg = data.get("root", {})
     rows = []
     for p in data["platforms"]:
-        rows.append([InlineKeyboardButton(p["name"], callback_data="smp:" + p["id"])])
+        rows.append([{"text": p["name"], "callback_data": "smp:" + p["id"], "emoji_id": p.get("emoji_id")}])
     if user_id == ADMIN_ID:
-        rows.append([InlineKeyboardButton("Manage Platforms", callback_data="smmp")])
-        rows.append([InlineKeyboardButton("Edit This Page", callback_data="smroot")])
-    rows.append([InlineKeyboardButton("Back", callback_data="smx")])
+        rows.append([{"text": "Manage Platforms", "callback_data": "smmp", "emoji_id": None}])
+        rows.append([{"text": "Edit This Page", "callback_data": "smroot", "emoji_id": None}])
+    rows.append([{"text": "Back", "callback_data": "smx", "emoji_id": None}])
     title = html.escape(cfg.get("title") or "Social Media Services")
     desc = html.escape(cfg.get("desc") or "Choose a platform:")
     text = "<b>" + title + "</b>" + NL + NL + desc
-    return text, InlineKeyboardMarkup(rows), cfg.get("image")
+    return text, rows, cfg.get("image")
 
-def _platform_screen(pid, user_id):
+def _platform_screen_rows(pid, user_id):
+    """Returns (caption, raw_rows, photo)."""
     data = _load()
     p = _platform(data, pid)
     if not p:
@@ -412,45 +509,47 @@ def _platform_screen(pid, user_id):
     rows = []
     i = 0
     while i < len(services):
-        row = [InlineKeyboardButton(services[i]["label"], callback_data="sms:" + pid + ":" + services[i]["id"])]
+        row = [{"text": services[i]["label"], "callback_data": "sms:" + pid + ":" + services[i]["id"], "emoji_id": services[i].get("emoji_id")}]
         if i + 1 < len(services):
-            row.append(InlineKeyboardButton(services[i + 1]["label"], callback_data="sms:" + pid + ":" + services[i + 1]["id"]))
+            row.append({"text": services[i + 1]["label"], "callback_data": "sms:" + pid + ":" + services[i + 1]["id"], "emoji_id": services[i + 1].get("emoji_id")})
         rows.append(row)
         i += 2
     if user_id == ADMIN_ID:
-        rows.append([InlineKeyboardButton("+ Add Service", callback_data="smsa:" + pid)])
+        rows.append([{"text": "+ Add Service", "callback_data": "smsa:" + pid, "emoji_id": None}])
         if services:
-            rows.append([InlineKeyboardButton("Manage Services", callback_data="smms:" + pid)])
-    rows.append([InlineKeyboardButton("Back", callback_data="smr")])
+            rows.append([{"text": "Manage Services", "callback_data": "smms:" + pid, "emoji_id": None}])
+            rows.append([{"text": "🎨 Set Service Emojis", "callback_data": "smemoji:" + pid, "emoji_id": None}])
+    rows.append([{"text": "Back", "callback_data": "smr", "emoji_id": None}])
     text = "<b>" + html.escape(p["name"]) + "</b>" + NL + NL + "Choose a service:"
-    return text, InlineKeyboardMarkup(rows), p.get("image")
+    return text, rows, p.get("image")
 
-def _service_screen(pid, sid):
-    data = _load()
-    p = _platform(data, pid)
-    s = _service(p, sid)
-    if not s:
-        return None
+def _qty_screen_rows(pid, sid, s):
+    """Quantity entry screen — shows qty_prompt + qty_image. Returns (caption, raw_rows, photo)."""
     caption = (
         "<b>" + html.escape(s["title"]) + "</b>" + NL + NL
         + html.escape(s["price_text"]) + NL + NL
         + html.escape(s["minimum_text"]) + NL + NL
         + "<b>" + html.escape(s["qty_prompt"]) + "</b>"
     )
-    rows = [[InlineKeyboardButton("Back", callback_data="smp:" + pid)]]
-    return caption, InlineKeyboardMarkup(rows), s.get("image")
+    rows = [[{"text": "Back", "callback_data": "smp:" + pid, "emoji_id": None}]]
+    photo = s.get("qty_image") or s.get("image")
+    return caption, rows, photo
 
-def _target_screen(s, qty=None):
-    lines = []
-    if qty is not None:
-        lines.append("<b>" + html.escape(s["unit"]) + " : " + _fmt_int(qty) + "</b>")
-        lines.append("")
-    lines.append("<b>" + html.escape(s["target_prompt"]) + "</b>")
-    caption = NL.join(lines)
-    rows = [[InlineKeyboardButton("Back", callback_data="smp:" + s["_pid"])]] if s.get("_pid") else None
-    return caption, (InlineKeyboardMarkup(rows) if rows else None), s.get("target_image")
+def _question_screen_rows(pid, s, qty):
+    """
+    Dedicated question screen shown after qty — like TG Premium username screen.
+    Shows target_prompt + target_image. Returns (caption, raw_rows, photo).
+    """
+    caption = (
+        "<b>" + html.escape(s["unit"]) + " : " + _fmt_int(qty) + "</b>" + NL + NL
+        + "<b>" + html.escape(s["target_prompt"]) + "</b>"
+    )
+    rows = [[{"text": "Back", "callback_data": "sms:" + pid + ":" + s["id"], "emoji_id": None}]]
+    photo = s.get("target_image")
+    return caption, rows, photo
 
-def _confirm_caption(s, qty, target):
+def _confirm_rows(pid, s, qty, target):
+    """Confirmation screen. Returns (caption, raw_rows, photo)."""
     total = _calc_total(s["price_per_1k"], qty)
     lines = ["<b>Product : " + _fmt_int(qty) + " " + html.escape(s["title"]) + "</b>"]
     if s["target_type"] == "post":
@@ -459,15 +558,22 @@ def _confirm_caption(s, qty, target):
         uname = _extract_ig_username(target)
         lines.append("<b>Instagram Username : @" + html.escape(uname) + "</b>")
     lines.append("<b>Total Price : " + _fmt_money(total) + "</b>")
-    return NL.join(lines)
+    caption = NL.join(lines)
+    rows = [
+        [{"text": "Buy Now", "callback_data": "cart:buysmm", "emoji_id": None}],
+        [{"text": "Add to Cart", "callback_data": "cart:addsmm", "emoji_id": None}],
+        [{"text": "Back", "callback_data": "smp:" + pid, "emoji_id": None}],
+    ]
+    photo = s.get("confirm_image") or s.get("image")
+    return caption, rows, photo
 
 # =====================================================================
-# admin panels
+# admin panels (unchanged structure, standard keyboard fine for admin)
 # =====================================================================
 def _manage_platforms_panel():
     data = _load()
     kb = []
-    for i, p in enumerate(data["platforms"]):
+    for p in data["platforms"]:
         kb.append([
             InlineKeyboardButton(p["name"], callback_data="smpr:" + p["id"]),
             InlineKeyboardButton("Up", callback_data="smpu:" + p["id"]),
@@ -476,8 +582,7 @@ def _manage_platforms_panel():
         ])
     kb.append([InlineKeyboardButton("+ Add Platform", callback_data="smpa")])
     kb.append([InlineKeyboardButton("Back", callback_data="smr")])
-    text = ("MANAGE PLATFORMS" + NL
-            + "Tap a name to rename. Use Up/Down to reorder, Del to delete.")
+    text = "MANAGE PLATFORMS" + NL + "Tap a name to rename. Use Up/Down to reorder, Del to delete."
     return text, InlineKeyboardMarkup(kb)
 
 def _manage_services_panel(pid):
@@ -494,8 +599,25 @@ def _manage_services_panel(pid):
         ])
     kb.append([InlineKeyboardButton("+ Add Service", callback_data="smsa:" + pid)])
     kb.append([InlineKeyboardButton("Back", callback_data="smp:" + pid)])
-    text = ("MANAGE SERVICES - " + p["name"] + NL
-            + "Tap a service to edit it, or use Up/Down to reorder.")
+    text = "MANAGE SERVICES - " + p["name"] + NL + "Tap a service to edit it, or use Up/Down to reorder."
+    return text, InlineKeyboardMarkup(kb)
+
+def _emoji_panel(pid):
+    """Panel listing all services in a platform so admin can set emoji per service."""
+    data = _load()
+    p = _platform(data, pid)
+    if not p:
+        return None
+    kb = []
+    for s in p.get("services", []):
+        emoji_info = " 2705" if s.get("emoji_id") else " 274c"
+        kb.append([InlineKeyboardButton(s["label"] + emoji_info, callback_data="smemojis:" + pid + ":" + s["id"])])
+    kb.append([InlineKeyboardButton("Back", callback_data="smp:" + pid)])
+    text = (
+        "SET SERVICE EMOJIS - " + p["name"] + NL + NL
+        + "2705 = emoji set   274c = no emoji" + NL
+        + "Tap a service to set or remove its emoji."
+    )
     return text, InlineKeyboardMarkup(kb)
 
 def _service_edit_panel(pid, sid):
@@ -513,17 +635,19 @@ def _service_edit_panel(pid, sid):
         + "Price text: " + s["price_text"] + NL
         + "Minimum: " + str(s["minimum"]) + NL
         + "Minimum text: " + s["minimum_text"] + NL
+        + "Qty prompt: " + s["qty_prompt"] + NL
+        + "Question prompt: " + s["target_prompt"] + NL
         + "Target type: " + s["target_type"] + NL
         + "Private check (auto-detect): " + ("on" if s.get("private_check") else "off") + NL
         + "Always remind (reliable): " + ("on" if s.get("always_remind") else "off") + NL
-        + "Service image: " + ("yes" if s.get("image") else "no") + NL
-        + "Quantity image: " + ("yes" if s.get("qty_image") else "no") + NL
-        + "Target image: " + ("yes" if s.get("target_image") else "no") + NL
-        + "Confirm image: " + ("yes" if s.get("confirm_image") else "no")
+        + "Service image (qty screen): " + ("yes" if s.get("image") else "no") + NL
+        + "Qty screen image: " + ("yes" if s.get("qty_image") else "no") + NL
+        + "Question screen image: " + ("yes" if s.get("target_image") else "no") + NL
+        + "Confirm screen image: " + ("yes" if s.get("confirm_image") else "no")
     )
     base = pid + ":" + sid
     kb = [
-        [InlineKeyboardButton("Edit Label", callback_data="smsf:label:" + base)],
+        [InlineKeyboardButton("Edit Button Label", callback_data="smsf:label:" + base)],
         [InlineKeyboardButton("Edit Title", callback_data="smsf:title:" + base)],
         [InlineKeyboardButton("Edit Unit", callback_data="smsf:unit:" + base)],
         [InlineKeyboardButton("Edit Price per 1k", callback_data="smsf:price_per_1k:" + base)],
@@ -531,15 +655,14 @@ def _service_edit_panel(pid, sid):
         [InlineKeyboardButton("Edit Minimum (number)", callback_data="smsf:minimum:" + base)],
         [InlineKeyboardButton("Edit Minimum Text", callback_data="smsf:minimum_text:" + base)],
         [InlineKeyboardButton("Edit Quantity Prompt", callback_data="smsf:qty_prompt:" + base)],
-        [InlineKeyboardButton("Edit Target Prompt", callback_data="smsf:target_prompt:" + base)],
+        [InlineKeyboardButton("Edit Question Text", callback_data="smsf:target_prompt:" + base)],
         [InlineKeyboardButton("Toggle Target (account/post)", callback_data="smtt:" + base)],
-        [InlineKeyboardButton("Toggle Private Check (auto-detect)", callback_data="smtp:" + base)],
-        [InlineKeyboardButton("Toggle Always Remind (reliable)", callback_data="smtr:" + base)],
+        [InlineKeyboardButton("Toggle Private Check", callback_data="smtp:" + base)],
+        [InlineKeyboardButton("Toggle Always Remind", callback_data="smtr:" + base)],
         [InlineKeyboardButton("Edit Private Reminder", callback_data="smsf:private_reminder:" + base)],
-        [InlineKeyboardButton("Change Service Image", callback_data="smsi:image:" + base)],
-        [InlineKeyboardButton("Change Quantity Image", callback_data="smsi:qty_image:" + base)],
-        [InlineKeyboardButton("Change Target Image", callback_data="smsi:target_image:" + base)],
-        [InlineKeyboardButton("Change Confirm Image", callback_data="smsi:confirm_image:" + base)],
+        [InlineKeyboardButton("Change Qty Screen Image", callback_data="smsi:qty_image:" + base)],
+        [InlineKeyboardButton("Change Question Screen Image", callback_data="smsi:target_image:" + base)],
+        [InlineKeyboardButton("Change Confirm Screen Image", callback_data="smsi:confirm_image:" + base)],
         [InlineKeyboardButton("Delete Service", callback_data="smsx:" + base)],
         [InlineKeyboardButton("Back", callback_data="smms:" + pid)],
     ]
@@ -557,19 +680,27 @@ async def _on_callback(update, context):
         return
     user_id = query.from_user.id
 
+    # ---- root SMM screen ----
     if data == "open:smm":
-        text, kb, photo = _root_screen(user_id)
-        if photo:
-            await query.message.reply_photo(photo=photo, caption=text, reply_markup=kb, parse_mode="HTML")
-        else:
-            await query.message.reply_text(text, reply_markup=kb, parse_mode="HTML")
+        caption, rows, photo = _root_screen_rows(user_id)
+        chat_id = query.message.chat_id
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        await _raw_send_message(chat_id, caption, rows, photo)
         await query.answer()
         raise ApplicationHandlerStop
 
     if data == "smr":
         context.user_data.pop("smm_flow", None)
-        text, kb, photo = _root_screen(user_id)
-        await _render(query, context, text, kb, photo)
+        caption, rows, photo = _root_screen_rows(user_id)
+        chat_id = query.message.chat_id
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        await _raw_send_message(chat_id, caption, rows, photo)
         await query.answer()
         raise ApplicationHandlerStop
 
@@ -581,33 +712,44 @@ async def _on_callback(update, context):
         await query.answer()
         raise ApplicationHandlerStop
 
+    # ---- platform screen ----
     if data.startswith("smp:"):
         pid = data[4:]
         context.user_data.pop("smm_flow", None)
-        res = _platform_screen(pid, user_id)
+        res = _platform_screen_rows(pid, user_id)
         if not res:
             await query.answer("Not found", show_alert=True)
             raise ApplicationHandlerStop
-        text, kb, photo = res
-        await _render(query, context, text, kb, photo)
+        caption, rows, photo = res
+        chat_id = query.message.chat_id
+        msg_id = query.message.message_id
+        had_photo = bool(query.message.photo)
+        await _raw_render_to(context, chat_id, msg_id, had_photo, caption, rows, photo)
         await query.answer()
         raise ApplicationHandlerStop
 
+    # ---- service selected → qty screen ----
     if data.startswith("sms:"):
         rest = data[4:]
         pid, sid = rest.split(":", 1)
-        res = _service_screen(pid, sid)
-        if not res:
+        d = _load()
+        s = _service(_platform(d, pid), sid)
+        if not s:
             await query.answer("Not found", show_alert=True)
             raise ApplicationHandlerStop
-        caption, kb, photo = res
-        result_msg = await _render(query, context, caption, kb, photo)
+        caption, rows, photo = _qty_screen_rows(pid, sid, s)
+        chat_id = query.message.chat_id
+        msg_id = query.message.message_id
+        had_photo = bool(query.message.photo)
+        await _raw_render_to(context, chat_id, msg_id, had_photo, caption, rows, photo)
         context.user_data.pop("state", None)
         context.user_data["smm_flow"] = {
-            "step": "qty", "pid": pid, "sid": sid,
-            "chat_id": result_msg.chat_id if result_msg else query.message.chat_id,
-            "msg_id": result_msg.message_id if result_msg else query.message.message_id,
-            "has_photo": bool(result_msg.photo) if result_msg else False,
+            "step": "qty",
+            "pid": pid,
+            "sid": sid,
+            "chat_id": chat_id,
+            "msg_id": msg_id,
+            "has_photo": photo is not None,
         }
         await query.answer()
         raise ApplicationHandlerStop
@@ -616,6 +758,7 @@ async def _on_callback(update, context):
         await query.answer("Not allowed", show_alert=True)
         raise ApplicationHandlerStop
 
+    # ---- admin: manage platforms ----
     if data == "smmp":
         context.user_data.pop("smm_flow", None)
         text, kb = _manage_platforms_panel()
@@ -720,6 +863,37 @@ async def _on_callback(update, context):
         await query.answer()
         raise ApplicationHandlerStop
 
+    if data.startswith("smemoji:"):
+        pid = data[8:]
+        res = _emoji_panel(pid)
+        if not res:
+            await query.answer("Not found", show_alert=True)
+            raise ApplicationHandlerStop
+        text, kb = res
+        await _safe_edit(query, context, text, kb)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if data.startswith("smemojis:"):
+        rest = data[9:]
+        pid, sid = rest.split(":", 1)
+        data2 = _load()
+        s = _service(_platform(data2, pid), sid)
+        if not s:
+            await query.answer("Not found", show_alert=True)
+            raise ApplicationHandlerStop
+        cur = "ID: " + str(s.get("emoji_id")) if s.get("emoji_id") else "None"
+        context.user_data["smm_flow"] = {"step": "set_svc_emoji", "pid": pid, "sid": sid}
+        await _safe_edit(query, context,
+            "SET EMOJI for: " + s["label"] + NL + NL
+            + "Current: " + cur + NL + NL
+            + "Send a message with a custom animated emoji IN IT." + NL
+            + "Send 0 to REMOVE the current emoji." + NL
+            + "(or /start to cancel)"
+        )
+        await query.answer()
+        raise ApplicationHandlerStop
+
     if data.startswith("smsa:"):
         pid = data[5:]
         context.user_data["smm_flow"] = {"step": "add_svc_label", "pid": pid, "draft": {}}
@@ -771,8 +945,10 @@ async def _on_callback(update, context):
             p["services"] = [s for s in p.get("services", []) if s["id"] != sid]
             _save(d)
         res = _manage_services_panel(pid)
-        text, kb = res if res else (("MANAGE SERVICES" + NL + "(none)"),
-                                    InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="smp:" + pid)]]))
+        text, kb = res if res else (
+            "MANAGE SERVICES" + NL + "(none)",
+            InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="smp:" + pid)]])
+        )
         await _safe_edit(query, context, "Service deleted." + NL + NL + text, kb)
         await query.answer()
         raise ApplicationHandlerStop
@@ -842,7 +1018,20 @@ async def _on_callback(update, context):
         context.user_data["smm_flow"] = {"step": "edit_field", "field": field, "pid": pid, "sid": sid}
         numeric = field in ("price_per_1k", "minimum")
         hint = " (numbers only)" if numeric else ""
-        await _safe_edit(query, context, "Send the new value for " + field + hint + ":" + NL + "(or /start to cancel)")
+        label_map = {
+            "label": "Button Label",
+            "title": "Title",
+            "unit": "Unit word",
+            "price_per_1k": "Price per 1,000",
+            "price_text": "Price Text",
+            "minimum": "Minimum quantity",
+            "minimum_text": "Minimum Text",
+            "qty_prompt": "Quantity Prompt (shown on quantity screen)",
+            "target_prompt": "Question Text (shown on question screen)",
+            "private_reminder": "Private Account Reminder",
+        }
+        label = label_map.get(field, field)
+        await _safe_edit(query, context, "Send the new value for <b>" + label + "</b>" + hint + ":" + NL + "(or /start to cancel)", None)
         await query.answer()
         raise ApplicationHandlerStop
 
@@ -850,8 +1039,15 @@ async def _on_callback(update, context):
         rest = data[5:]
         field, pid, sid = rest.split(":", 2)
         context.user_data["smm_flow"] = {"step": "edit_image", "field": field, "pid": pid, "sid": sid}
-        await _safe_edit(query, context, "Send the new image for " + field + "." + NL
-                         + "(send 0 to remove it, or /start to cancel)")
+        label_map = {
+            "qty_image": "Quantity Screen Image",
+            "target_image": "Question Screen Image",
+            "confirm_image": "Confirm Screen Image",
+            "image": "Service Image",
+        }
+        label = label_map.get(field, field)
+        await _safe_edit(query, context, "Send the new image for <b>" + label + "</b>." + NL
+                         + "(send 0 to remove it, or /start to cancel)", None)
         await query.answer()
         raise ApplicationHandlerStop
 
@@ -869,6 +1065,7 @@ async def _on_text(update, context):
     text = (update.message.text or "").strip()
     uid = update.effective_user.id
 
+    # ---- STEP 1: qty entry ----
     if step == "qty":
         d = _load()
         s = _service(_platform(d, flow["pid"]), flow["sid"])
@@ -877,23 +1074,29 @@ async def _on_text(update, context):
             await update.message.reply_text("Sorry, that service is no longer available. Send /start.")
             raise ApplicationHandlerStop
         qty = _parse_int(text)
-        if qty is None:
-            await _delete_user_msg(update)
-            raise ApplicationHandlerStop
-        if qty < int(s.get("minimum", 0)):
+        if qty is None or qty < int(s.get("minimum", 0)):
             await _delete_user_msg(update)
             raise ApplicationHandlerStop
         await _delete_user_msg(update)
         flow["qty"] = qty
         flow["step"] = "target"
-        s_copy = dict(s)
-        s_copy["_pid"] = flow["pid"]
-        caption, kb, photo = _target_screen(s_copy, qty)
-        await _render_to(context, flow["chat_id"], flow["msg_id"], flow["has_photo"], caption, kb, photo)
+
+        # Show the dedicated question screen
+        caption, rows, photo = _question_screen_rows(flow["pid"], s, qty)
+        result = await _raw_render_to(
+            context, flow["chat_id"], flow["msg_id"], flow["has_photo"],
+            caption, rows, photo
+        )
         flow["has_photo"] = photo is not None
+        # Update msg_id if a new message was sent
+        if result and hasattr(result, "message_id"):
+            flow["msg_id"] = result.message_id
+        elif result and isinstance(result, dict) and result.get("result", {}).get("message_id"):
+            flow["msg_id"] = result["result"]["message_id"]
         context.user_data["smm_flow"] = flow
         raise ApplicationHandlerStop
 
+    # ---- STEP 2: target / question answer ----
     if step == "target":
         d = _load()
         s = _service(_platform(d, flow["pid"]), flow["sid"])
@@ -901,36 +1104,30 @@ async def _on_text(update, context):
             context.user_data.pop("smm_flow", None)
             await update.message.reply_text("Sorry, that service is no longer available. Send /start.")
             raise ApplicationHandlerStop
+
         target_raw = text
-        if not target_raw or " " in target_raw.strip():
-            await _delete_user_msg(update)
-            raise ApplicationHandlerStop
+        # For account type: basic username validation (no spaces, not empty)
+        if s["target_type"] == "account":
+            if not target_raw or " " in target_raw.strip():
+                await _delete_user_msg(update)
+                raise ApplicationHandlerStop
+        # For post type: must look like a link or at least no spaces
+        else:
+            if not target_raw or " " in target_raw.strip():
+                await _delete_user_msg(update)
+                raise ApplicationHandlerStop
+
         await _delete_user_msg(update)
 
         qty = flow.get("qty", 0)
         chat_id, msg_id, had_photo = flow["chat_id"], flow["msg_id"], flow["has_photo"]
-        confirm_caption = _confirm_caption(s, qty, target_raw)
+
         if s["target_type"] == "post":
             _ctgt = target_raw
         else:
             _ctgt = "@" + _extract_ig_username(target_raw)
-        context.user_data["cart_pending"] = {
-            "kind": "smm",
-            "title": s["title"],
-            "price_per_1k": s["price_per_1k"],
-            "qty": int(qty),
-            "min": int(s.get("minimum", 1)),
-            "step": int(s.get("minimum", 1)) if int(s.get("minimum", 1)) > 0 else 100,
-            "target": _ctgt,
-            "pid": flow["pid"],
-        }
-        confirm_kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Buy Now", callback_data="cart:buysmm")],
-            [InlineKeyboardButton("Add to Cart", callback_data="cart:addsmm")],
-            [InlineKeyboardButton("Back", callback_data="smp:" + flow["pid"])],
-        ])
-        confirm_photo = s.get("confirm_image") or s.get("image")
 
+        # Private account check
         do_check = (s["target_type"] == "account") and bool(s.get("private_check"))
         is_private = None
         if do_check:
@@ -940,8 +1137,8 @@ async def _on_text(update, context):
         force_remind = (s["target_type"] == "account") and bool(s.get("always_remind"))
         show_reminder = (is_private is True) or force_remind
 
+        # Save cart pending
         context.user_data.pop("smm_flow", None)
-        # keep cart_pending (pop only clears smm_flow above? no - re-set it)
         context.user_data["cart_pending"] = {
             "kind": "smm",
             "title": s["title"],
@@ -953,16 +1150,55 @@ async def _on_text(update, context):
             "pid": flow["pid"],
         }
 
+        confirm_caption, confirm_rows, confirm_photo = _confirm_rows(flow["pid"], s, qty, _ctgt)
+
         if show_reminder:
             reminder = "<b>" + html.escape(s.get("private_reminder", "")) + "</b>"
             r_photo = s.get("target_image")
-            await _render_to(context, chat_id, msg_id, had_photo, reminder, None, r_photo)
+            # Show reminder without buttons
+            await _raw_render_to(context, chat_id, msg_id, had_photo, reminder, [], r_photo)
             await asyncio.sleep(5)
-            await _render_to(context, chat_id, msg_id, r_photo is not None,
-                             confirm_caption, confirm_kb, confirm_photo)
+            await _raw_send_message(chat_id, confirm_caption, confirm_rows, confirm_photo)
         else:
-            await _render_to(context, chat_id, msg_id, had_photo,
-                             confirm_caption, confirm_kb, confirm_photo)
+            await _raw_render_to(context, chat_id, msg_id, had_photo,
+                                 confirm_caption, confirm_rows, confirm_photo)
+        raise ApplicationHandlerStop
+
+    # ---- Admin flows ----
+    if step == "set_svc_emoji":
+        if uid != ADMIN_ID:
+            context.user_data.pop("smm_flow", None)
+            return
+        pid = flow.get("pid")
+        sid = flow.get("sid")
+        if text == "0":
+            d = _load()
+            s = _service(_platform(d, pid), sid)
+            if s:
+                s["emoji_id"] = None
+                _save(d)
+            context.user_data.pop("smm_flow", None)
+            res = _emoji_panel(pid)
+            if res:
+                t, kb = res
+                await _reply_back(update, "Emoji removed." + NL + NL + t, "smemoji:" + pid)
+            raise ApplicationHandlerStop
+        from telegram import MessageEntity as ME
+        entities = update.message.entities or []
+        custom_emojis = [e for e in entities if e.type == ME.CUSTOM_EMOJI]
+        if custom_emojis:
+            emoji_id = custom_emojis[0].custom_emoji_id
+            d = _load()
+            s = _service(_platform(d, pid), sid)
+            if s:
+                s["emoji_id"] = emoji_id
+                _save(d)
+            context.user_data.pop("smm_flow", None)
+            await _reply_back(update, "Emoji set! ID: " + emoji_id, "smemoji:" + pid)
+        else:
+            await update.message.reply_text(
+                "No custom emoji detected. Send a message with an animated emoji, or send 0 to remove."
+            )
         raise ApplicationHandlerStop
 
     if step == "edit_root_field":
@@ -1051,9 +1287,27 @@ async def _on_text(update, context):
             await update.message.reply_text("Please send a whole number (example: 500).")
             raise ApplicationHandlerStop
         flow["draft"]["minimum"] = mn
+        flow["step"] = "add_svc_qty_prompt"
+        await update.message.reply_text(
+            "Send the QUANTITY PROMPT text shown on the quantity screen:" + NL
+            + "(example: Please Enter The Number Of Followers You Want)"
+        )
+        raise ApplicationHandlerStop
+
+    if step == "add_svc_qty_prompt":
+        flow["draft"]["qty_prompt"] = text
+        flow["step"] = "add_svc_target_prompt"
+        await update.message.reply_text(
+            "Send the QUESTION TEXT shown on the question screen:" + NL
+            + "(example: Please Enter Your Instagram Username or Profile Link)"
+        )
+        raise ApplicationHandlerStop
+
+    if step == "add_svc_target_prompt":
+        flow["draft"]["target_prompt"] = text
         flow["step"] = "add_svc_type"
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Account (username)", callback_data="smtype:account")],
+            [InlineKeyboardButton("Account (username/profile)", callback_data="smtype:account")],
             [InlineKeyboardButton("Post (link)", callback_data="smtype:post")],
         ])
         await update.message.reply_text("Does this service target an ACCOUNT or a POST?", reply_markup=kb)
@@ -1102,6 +1356,9 @@ async def _on_text(update, context):
 
     return
 
+# =====================================================================
+# type choice callback (add service flow)
+# =====================================================================
 async def _handle_type_choice(query, context, choice):
     flow = context.user_data.get("smm_flow")
     if not flow or flow.get("step") != "add_svc_type":
@@ -1112,8 +1369,11 @@ async def _handle_type_choice(query, context, choice):
     unit = draft["unit"]
     price = draft["price"]
     minimum = draft["minimum"]
-    acct_prompt = "Please Enter Your Instagram Profile Username or Link"
-    post_prompt = "Please Enter Your Instagram Post Link"
+    qty_prompt = draft.get("qty_prompt", "Please Enter The Number Of " + unit + " You want")
+    target_prompt = draft.get("target_prompt",
+        "Please Enter Your Instagram Profile Username or Link" if choice == "account"
+        else "Please Enter Your Instagram Post Link"
+    )
     svc = {
         "id": uuid.uuid4().hex[:6],
         "label": draft["label"],
@@ -1123,10 +1383,10 @@ async def _handle_type_choice(query, context, choice):
         "price_text": "Price : " + _fmt_money(price) + " Per 1,000 " + unit,
         "minimum": minimum,
         "minimum_text": "Minimum : " + str(minimum) + " " + unit,
-        "qty_prompt": "Please Enter The Number Of " + unit + " You want",
+        "qty_prompt": qty_prompt,
         "qty_image": None,
         "target_type": choice,
-        "target_prompt": acct_prompt if choice == "account" else post_prompt,
+        "target_prompt": target_prompt,
         "target_image": None,
         "image": None,
         "confirm_image": None,
@@ -1149,6 +1409,9 @@ async def _handle_type_choice(query, context, choice):
         await _safe_edit(query, context, "Service added." + NL + NL + text, kb)
     await query.answer()
 
+# =====================================================================
+# PHOTO HANDLER (group -1)
+# =====================================================================
 async def _on_photo(update, context):
     flow = context.user_data.get("smm_flow")
     if not flow or flow.get("step") not in ("edit_image", "edit_root_image"):
@@ -1175,6 +1438,9 @@ async def _on_photo(update, context):
     await _reply_back(update, "Image updated.", "smse:" + pid + ":" + sid)
     raise ApplicationHandlerStop
 
+# =====================================================================
+# helpers
+# =====================================================================
 async def _reply_back(update, message, back_callback):
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data=back_callback)]])
     await update.message.reply_text(message, reply_markup=kb)
@@ -1195,13 +1461,93 @@ async def _on_callback_with_type(update, context):
         raise ApplicationHandlerStop
     await _original_on_callback(update, context)
 
-def setup(application, admin_id):
-    global ADMIN_ID
+# =====================================================================
+# SETUP
+# =====================================================================
+def setup(application, admin_id, bot_token=None):
+    global ADMIN_ID, BOT_TOKEN, TG_API_BASE
     ADMIN_ID = admin_id
+    if bot_token:
+        BOT_TOKEN = bot_token
+    else:
+        # Try to read from bot.py's global if available
+        try:
+            import bot as _bot
+            BOT_TOKEN = _bot.BOT_TOKEN
+        except Exception:
+            pass
+    TG_API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
     application.add_handler(CallbackQueryHandler(_on_callback_with_type), group=-1)
     application.add_handler(MessageHandler(filters.PHOTO, _on_photo), group=-1)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _on_text), group=-1)
+
     n_keys = len([k for k in RAPIDAPI_KEYS if k])
     print("Social Media module loaded.")
     print("  RapidAPI keys:", n_keys, "| httpx:", HTTPX_AVAILABLE, "| instaloader fallback:", IG_AVAILABLE)
     print("  Private-check active:", _check_enabled())
+    print("  Custom emoji support: ON (raw API)")
+
+# =====================================================================
+# EMOJI HELPERS (called by bot.py for the global Set Product Emoji panel)
+# =====================================================================
+def load_for_emoji():
+    """Returns list of (service_id, label, has_emoji) for all services across all platforms."""
+    data = _load()
+    result = []
+    for p in data["platforms"]:
+        for s in p.get("services", []):
+            result.append((s["id"], s["label"], bool(s.get("emoji_id"))))
+    return result
+
+def get_service_emoji_info(sid):
+    """Returns (label, current_emoji_id) for a service by id."""
+    data = _load()
+    for p in data["platforms"]:
+        for s in p.get("services", []):
+            if s["id"] == sid:
+                return s["label"], s.get("emoji_id")
+    return sid, None
+
+def set_service_emoji(sid, emoji_id):
+    """Set or clear emoji_id on a service by id."""
+    data = _load()
+    for p in data["platforms"]:
+        for s in p.get("services", []):
+            if s["id"] == sid:
+                s["emoji_id"] = emoji_id
+                _save(data)
+                return
+
+def load_platforms_for_emoji():
+    """Returns list of (platform_id, platform_name, has_emoji) for all platforms."""
+    data = _load()
+    result = []
+    for p in data["platforms"]:
+        result.append((p["id"], p["name"], bool(p.get("emoji_id"))))
+    return result
+
+def get_platform_emoji_info(plat_id):
+    """Returns (name, current_emoji_id) for a platform by id."""
+    data = _load()
+    for p in data["platforms"]:
+        if p["id"] == plat_id:
+            return p["name"], p.get("emoji_id")
+    return plat_id, None
+
+def set_platform_emoji(plat_id, emoji_id):
+    """Set or clear emoji_id on a platform by id."""
+    data = _load()
+    for p in data["platforms"]:
+        if p["id"] == plat_id:
+            p["emoji_id"] = emoji_id
+            _save(data)
+            return
+
+def load_services_for_emoji(plat_id):
+    """Returns list of (service_id, label, has_emoji) for all services in a platform."""
+    data = _load()
+    p = _platform(data, plat_id)
+    if not p:
+        return []
+    return [(s["id"], s["label"], bool(s.get("emoji_id"))) for s in p.get("services", [])]
