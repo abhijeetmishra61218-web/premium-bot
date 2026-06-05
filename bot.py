@@ -960,7 +960,11 @@ def product_screen(pid, user_id=None):
             status_text = "PAUSED" if plan_reason == "plan_paused" else "OUT"
             rows.append([{"text": plan["name"] + " | " + plan["price"] + " [" + status_text + "]", "callback_data": "noop", "emoji_id": plan.get("emoji_id")}])
     if user_id == ADMIN_ID:
-        rows.append([{"text": "Edit Product", "callback_data": "pm:" + pid, "emoji_id": None}])
+        img_status = "Change Image" if product.get("image") else "Add Image"
+        rows.append([
+            {"text": "Edit Product", "callback_data": "pm:" + pid, "emoji_id": None},
+            {"text": img_status, "callback_data": "pei:" + pid, "emoji_id": None},
+        ])
     rows.append([{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}])
     return caption, rows, product.get("image")
 
