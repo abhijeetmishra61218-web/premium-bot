@@ -80,6 +80,19 @@ _IG_TIMEOUT = 10
 TG_API_BASE = ""  # set in setup()
 
 # =====================================================================
+# HELPER: convert raw rows to standard InlineKeyboardMarkup
+# =====================================================================
+def _rows_to_kb(rows):
+    """Convert raw rows (list of list of dicts) to InlineKeyboardMarkup."""
+    kb_rows = []
+    for row in rows:
+        kb_row = []
+        for btn in row:
+            kb_row.append(InlineKeyboardButton(btn["text"], callback_data=btn["callback_data"]))
+        kb_rows.append(kb_row)
+    return InlineKeyboardMarkup(kb_rows)
+
+# =====================================================================
 # RAW API HELPERS (enables custom emoji on buttons)
 # =====================================================================
 def _build_raw_keyboard(rows_spec):
@@ -684,12 +697,30 @@ async def _on_callback(update, context):
     if data == "open:smm":
         caption, rows, photo = _root_screen_rows(user_id)
         chat_id = query.message.chat_id
-        try:
-            await query.message.delete()
-        except Exception:
-            pass
-        await _raw_send_message(chat_id, caption, rows, photo)
+        msg_id = query.message.message_id
+        had_photo = bool(query.message.photo)
         await query.answer()
+        # Use standard render (no raw API needed here — no custom emoji on root screen buttons)
+        kb = _rows_to_kb(rows)
+        try:
+            if photo and had_photo:
+                await query.message.edit_media(
+                    media=__import__("telegram").InputMediaPhoto(media=photo, caption=caption, parse_mode="HTML"),
+                    reply_markup=kb,
+                )
+            elif not photo and not had_photo:
+                await query.message.edit_text(caption, reply_markup=kb, parse_mode="HTML")
+            else:
+                raise Exception("need new message")
+        except Exception:
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
+            if photo:
+                await query.get_bot().send_photo(chat_id=chat_id, photo=photo, caption=caption, reply_markup=kb, parse_mode="HTML")
+            else:
+                await query.get_bot().send_message(chat_id=chat_id, text=caption, reply_markup=kb, parse_mode="HTML")
         raise ApplicationHandlerStop
 
     if data == "smr":
