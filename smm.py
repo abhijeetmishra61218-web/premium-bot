@@ -534,8 +534,11 @@ def _platform_screen_rows(pid, user_id):
         if services:
             rows.append([{"text": "Manage Services", "callback_data": "smms:" + pid, "emoji_id": None}])
             rows.append([{"text": "🎨 Set Service Emojis", "callback_data": "smemoji:" + pid, "emoji_id": None}])
+        rows.append([{"text": "✏️ Edit Page Text", "callback_data": "smpt:" + pid, "emoji_id": None}])
+        rows.append([{"text": "🖼 Set Page Image", "callback_data": "smpi:" + pid, "emoji_id": None}])
     rows.append([{"text": "Back", "callback_data": "smr", "emoji_id": None}])
-    text = "<b>" + html.escape(p["name"]) + "</b>" + NL + NL + "Choose a service:"
+    intro = p.get("intro") or "Choose a service:"
+    text = "<b>" + html.escape(p["name"]) + "</b>" + NL + NL + html.escape(intro)
     return text, rows, p.get("image")
 
 def _qty_screen_rows(pid, sid, s):
@@ -778,6 +781,40 @@ async def _on_callback(update, context):
         context.user_data.pop("smm_flow", None)
         text, kb = _manage_platforms_panel()
         await _safe_edit(query, context, text, kb)
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if data.startswith("smpt:"):
+        pid = data[5:]
+        d = _load()
+        p = _platform(d, pid)
+        if not p:
+            await query.answer("Not found", show_alert=True)
+            raise ApplicationHandlerStop
+        context.user_data["smm_flow"] = {"step": "edit_plat_text", "pid": pid}
+        cur = p.get("intro") or "Choose a service:"
+        await _safe_edit(query, context,
+            "EDIT PAGE TEXT - " + p["name"] + NL + NL
+            + "Current text:" + NL + cur + NL + NL
+            + "Send the new text. (or /start to cancel)"
+        )
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if data.startswith("smpi:"):
+        pid = data[5:]
+        d = _load()
+        p = _platform(d, pid)
+        if not p:
+            await query.answer("Not found", show_alert=True)
+            raise ApplicationHandlerStop
+        context.user_data["smm_flow"] = {"step": "edit_plat_image", "pid": pid}
+        has_img = "Yes" if p.get("image") else "No"
+        await _safe_edit(query, context,
+            "SET PAGE IMAGE - " + p["name"] + NL + NL
+            + "Current image: " + has_img + NL + NL
+            + "Send a photo to set it, or send 0 to remove it. (or /start to cancel)"
+        )
         await query.answer()
         raise ApplicationHandlerStop
 
@@ -1216,6 +1253,37 @@ async def _on_text(update, context):
             )
         raise ApplicationHandlerStop
 
+    if step == "edit_plat_text":
+        if uid != ADMIN_ID:
+            context.user_data.pop("smm_flow", None)
+            return
+        pid = flow.get("pid")
+        d = _load()
+        p = _platform(d, pid)
+        if p:
+            p["intro"] = text
+            _save(d)
+        context.user_data.pop("smm_flow", None)
+        await _reply_back(update, "Page text updated.", "smp:" + pid)
+        raise ApplicationHandlerStop
+
+    if step == "edit_plat_image":
+        if uid != ADMIN_ID:
+            context.user_data.pop("smm_flow", None)
+            return
+        if text == "0":
+            pid = flow.get("pid")
+            d = _load()
+            p = _platform(d, pid)
+            if p:
+                p["image"] = None
+                _save(d)
+            context.user_data.pop("smm_flow", None)
+            await _reply_back(update, "Page image removed.", "smp:" + pid)
+        else:
+            await update.message.reply_text("Please send a photo, or send 0 to remove the image.")
+        raise ApplicationHandlerStop
+
     if step == "edit_root_field":
         if uid != ADMIN_ID:
             context.user_data.pop("smm_flow", None)
@@ -1434,6 +1502,17 @@ async def _on_photo(update, context):
     if update.effective_user.id != ADMIN_ID:
         return
     file_id = update.message.photo[-1].file_id
+
+    if flow.get("step") == "edit_plat_image":
+        pid = flow.get("pid")
+        d = _load()
+        p = _platform(d, pid)
+        if p:
+            p["image"] = file_id
+            _save(d)
+        context.user_data.pop("smm_flow", None)
+        await _reply_back(update, "Page image updated.", "smp:" + pid)
+        raise ApplicationHandlerStop
 
     if flow.get("step") == "edit_root_image":
         d = _load()
