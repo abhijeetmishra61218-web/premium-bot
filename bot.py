@@ -906,13 +906,7 @@ async def cmd_stock_status(update, context):
 # ========== customer screens ==========
 def category_screen(cat_id, user_id):
     name = button_name(cat_id)
-    # Accept any category that has products, not just the hardcoded set
-    all_products = load_products()["items"]
-    cat_has_products = any(p.get("category") == cat_id for p in all_products.values())
-    if cat_id not in PRODUCT_CATEGORIES and not cat_has_products:
-        text = "<b>" + html.escape(name) + "</b>" + NL + NL + "This section is coming soon."
-        rows = [[{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}]]
-        return text, rows, None
+    # All categories are valid — no restriction
     prods = products_in_category(cat_id)
     rows = []
     i = 0
@@ -936,9 +930,7 @@ def category_screen(cat_id, user_id):
         text = "<b>" + html.escape(name) + "</b>" + NL + "No products yet. Tap 'Add Product' to create one."
     else:
         text = "<b>" + html.escape(name) + "</b>" + NL + "No products available yet. Please check back soon."
-    # Make sure PRODUCT_CATEGORIES stays in sync
-    if cat_id not in PRODUCT_CATEGORIES:
-        PRODUCT_CATEGORIES.add(cat_id)
+
     return text, rows, cat_image
 
 def product_screen(pid, user_id=None):

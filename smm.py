@@ -114,6 +114,8 @@ def _build_raw_keyboard(rows_spec):
 async def _raw_send_message(chat_id, text, keyboard_rows, photo=None, parse_mode="HTML"):
     if photo:
         return await _raw_send_photo(chat_id, photo, text, keyboard_rows, parse_mode)
+    if not TG_API_BASE:
+        return None
     payload = {
         "chat_id": chat_id,
         "text": text,
@@ -697,30 +699,12 @@ async def _on_callback(update, context):
     if data == "open:smm":
         caption, rows, photo = _root_screen_rows(user_id)
         chat_id = query.message.chat_id
-        msg_id = query.message.message_id
-        had_photo = bool(query.message.photo)
-        await query.answer()
-        # Use standard render (no raw API needed here — no custom emoji on root screen buttons)
-        kb = _rows_to_kb(rows)
         try:
-            if photo and had_photo:
-                await query.message.edit_media(
-                    media=__import__("telegram").InputMediaPhoto(media=photo, caption=caption, parse_mode="HTML"),
-                    reply_markup=kb,
-                )
-            elif not photo and not had_photo:
-                await query.message.edit_text(caption, reply_markup=kb, parse_mode="HTML")
-            else:
-                raise Exception("need new message")
+            await query.message.delete()
         except Exception:
-            try:
-                await query.message.delete()
-            except Exception:
-                pass
-            if photo:
-                await query.get_bot().send_photo(chat_id=chat_id, photo=photo, caption=caption, reply_markup=kb, parse_mode="HTML")
-            else:
-                await query.get_bot().send_message(chat_id=chat_id, text=caption, reply_markup=kb, parse_mode="HTML")
+            pass
+        await _raw_send_message(chat_id, caption, rows, photo)
+        await query.answer()
         raise ApplicationHandlerStop
 
     if data == "smr":
