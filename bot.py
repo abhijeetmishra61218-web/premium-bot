@@ -2701,6 +2701,11 @@ async def on_text(update, context):
 async def on_photo(update, context):
     if update.effective_user.id != ADMIN_ID:
         return
+    # If smm_flow is active, let smm.py handle it (group -1 runs first, but
+    # bot.py photo handler is group 0 — so we delegate explicitly here)
+    smm_flow = context.user_data.get("smm_flow")
+    if smm_flow and smm_flow.get("step") in ("edit_plat_image", "edit_root_image", "edit_image"):
+        return  # smm.py group -1 handler will catch it
     state = context.user_data.get("state")
     file_id = update.message.photo[-1].file_id
 

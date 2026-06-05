@@ -1497,7 +1497,7 @@ async def _handle_type_choice(query, context, choice):
 # =====================================================================
 async def _on_photo(update, context):
     flow = context.user_data.get("smm_flow")
-    if not flow or flow.get("step") not in ("edit_image", "edit_root_image"):
+    if not flow or flow.get("step") not in ("edit_image", "edit_root_image", "edit_plat_image"):
         return
     if update.effective_user.id != ADMIN_ID:
         return
