@@ -1,0 +1,59 @@
+[
+  {
+    "id": "ott",
+    "text": "OTT Premium",
+    "size": "half",
+    "emoji_id": "5348125953090403204"
+  },
+  {
+    "id": "vpn",
+    "text": "VPN's",
+    "size": "half",
+    "emoji_id": "5447410659077661506"
+  },
+  {
+    "id": "tg",
+    "text": "Telegram Premium",
+    "size": "full",
+    "emoji_id": "6136464120779638846"
+  },
+  {
+    "id": "software",
+    "text": "Professional Creative Software",
+    "size": "full",
+    "emoji_id": "5395444784611480792",
+    "callback_data": "open:software"
+  },
+  {
+    "id": "smm",
+    "text": "Social Media Services",
+    "size": "full",
+    "callback_data": "open:smm",
+    "emoji_id": "5337080053119336309"
+  },
+  {
+    "id": "ai",
+    "text": "AI Platforms",
+    "size": "full",
+    "callback_data": "open:ai",
+    "emoji_id": "5296447931627352804"
+  },
+  {
+    "id": "wallet",
+    "text": "Wallet",
+    "size": "full",
+    "emoji_id": "5215420556089776398"
+  },
+  {
+    "id": "support",
+    "text": "Support",
+    "size": "full",
+    "emoji_id": "5443038326535759644"
+  },
+  {
+    "id": "viewcart",
+    "text": "View Cart",
+    "size": "full",
+    "emoji_id": "5312361253610475399"
+  }
+]

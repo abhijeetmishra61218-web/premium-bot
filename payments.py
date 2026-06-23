@@ -860,7 +860,7 @@ def _looks_like_hash(chain, txhash):
     return bool(_HEX64_RE.match(txhash))
 
 def get_picker_text():
-    return load_cryptos().get("picker_text") or "💰 Please choose your preferred cryptocurrency for payment"
+    return load_cryptos().get("picker_text") or "Please choose your preferred cryptocurrency for payment"
 
 def set_picker_text(t):
     data = load_cryptos()
@@ -1054,7 +1054,7 @@ def _wallet_balance(user_id):
 
 def _wallet_home_screen_raw(user_id):
     bal = _wallet_balance(user_id)
-    text = "<b>💰 Your current balance is: " + _fmt_money(bal) + "</b>"
+    text = "<b>Your current balance is: " + _fmt_money(bal) + "</b>"
     keyboard_rows = [
         [{"text": "Deposit", "callback_data": "pay:deposit"}],
         [{"text": "Back", "callback_data": "pay:walletclose"}]
@@ -1385,7 +1385,7 @@ async def _mark_received_raw(context, user_id, res):
         msg = (
             "<b>✅ We Have Received The Payment</b>" + NL + NL
             + _fmt_money(amount) + " has been added to your wallet." + NL + NL
-            + "💰 Your current balance is: <b>" + _fmt_money(new_bal) + "</b>"
+            + "Your current balance is: <b>" + _fmt_money(new_bal) + "</b>"
         )
         try:
             await context.bot.send_message(order["chat_id"], msg, parse_mode="HTML")
@@ -1710,7 +1710,7 @@ async def _on_callback(update, context):
         if bal >= total:
             order["state"] = "wallet_choice"
             context.user_data["pay_order"] = order
-            text = f"<b>💰 Your current balance is: {_fmt_money(bal)}</b>"
+            text = f"<b>Your current balance is: {_fmt_money(bal)}</b>"
             keyboard_rows = [
                 [{"text": "Use Wallet Balance", "callback_data": "pay:walletfull"}],
                 [{"text": "Use Crypto", "callback_data": "pay:usecrypto"}],
@@ -1721,7 +1721,7 @@ async def _on_callback(update, context):
             raise ApplicationHandlerStop
         order["state"] = "await_wallet_amount"
         context.user_data["pay_order"] = order
-        msg = ("<b>💰 Your current balance is: " + _fmt_money(bal) + "</b>" + NL
+        msg = ("<b>Your current balance is: " + _fmt_money(bal) + "</b>" + NL
                + "How much would you like to use?")
         await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], msg)
         await query.answer()

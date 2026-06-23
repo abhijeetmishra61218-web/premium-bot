@@ -1,0 +1,299 @@
+{
+  "items": {
+    "0ef10521": {
+      "category": "ott",
+      "name": "YT Premium",
+      "description": "Enjoy YouTube Premium with ad-free streaming, offline downloads, background play, and YouTube Music included — comes with full Warranty.",
+      "image": "AgACAgUAAxkBAAIIW2ofSbEFUwSMlHFPFaUHe7ci8D2MAAJMEGsbodABVQ9TukEOEartAQADAgADeQADOwQ",
+      "plans": [
+        {
+          "id": "419906",
+          "name": "12 Months",
+          "price": "$60",
+          "image": "AgACAgUAAxkBAAIH-WofQIhDMlldmO1_cywwSBxs01MZAAJFEGsbodABVUjn9iC8dsR9AQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5334681713316479679"
+    },
+    "06c39f59": {
+      "category": "ott",
+      "name": "Netflix",
+      "description": "Upgrade to Netflix Premium with full warranty for uninterrupted, ad-free entertainment, offline downloads, and seamless access across all your devices — and more.",
+      "image": "AgACAgUAAxkBAAII1GofTbUCCfPjDOJoJbnzk1uzFm4aAAJUEGsbodABVXJf3i6lJw7FAQADAgADeQADOwQ",
+      "plans": [
+        {
+          "id": "4c9342",
+          "name": "6 Months",
+          "price": "$60",
+          "image": "AgACAgUAAxkBAAIJP2ofVavaekt_rqOjllSNc_BqVBBkAAJYEGsbodABVeZ6qMndqPFTAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "9f4c27",
+          "name": "12 Months",
+          "price": "$100",
+          "image": "AgACAgUAAxkBAAIJLmofVQ0AAVYjj3mgHQ_yqEAsLrl_NQACVxBrG6HQAVUAAa9DxDgewBsBAAMCAAN5AAM7BA",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5877576553172308576"
+    },
+    "dd5383bb": {
+      "category": "ott",
+      "name": "Spotify",
+      "description": "Upgrade to Spotify Premium with full warranty for uninterrupted, ad-free music, offline downloads, and seamless listening across all your devices — and more.",
+      "image": "AgACAgUAAxkBAAIJQ2ofVnidoDBThrcXtY31TzxSN0WSAAJZEGsbodABVYt9mKeSarjcAQADAgADeQADOwQ",
+      "plans": [
+        {
+          "id": "c61534",
+          "name": "3 Months",
+          "price": "$18",
+          "image": "AgACAgUAAxkBAAIJTWofVw88VvOkmODvZEGtiOnWVrBJAAJaEGsbodABVfwiiNztZxgJAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "e5a895",
+          "name": "6 Months",
+          "price": "$32",
+          "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "67f7ae",
+          "name": "12 Months",
+          "price": "$70",
+          "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5868508172108435919"
+    },
+    "ba12b018": {
+      "category": "ott",
+      "name": "Prime Videos",
+      "description": "Step into a world of exclusive movies and series with Prime Video, secured with full warranty and designed for smooth streaming, offline viewing, and total viewing freedom.",
+      "image": "AgACAgUAAxkBAAIJZ2ofV-Ib18GVn7yB51E6fEnjwuStAAJbEGsbodABVdg4WatTlnIcAQADAgADeQADOwQ",
+      "plans": [
+        {
+          "id": "d7f032",
+          "name": "6 Months",
+          "price": "$30",
+          "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "b33510",
+          "name": "12 Months",
+          "price": "$60",
+          "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5877697061364698656"
+    },
+    "bd031159": {
+      "category": "ott",
+      "name": "Apple TV",
+      "description": "Discover a refined streaming experience with Apple TV+, offering award-winning originals, seamless playback across your devices, and the assurance of full warranty.",
+      "image": "AgACAgUAAxkBAAIJo2ofWmiiL9qlg6qoSaYw-4XScu5QAAJcEGsbodABVQuBt_wvDDGgAQADAgADeQADOwQ",
+      "plans": [
+        {
+          "id": "48b101",
+          "name": "6 Months",
+          "price": "$45",
+          "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "4958909307987952352"
+    },
+    "33d71e04": {
+      "category": "ott",
+      "name": "Crunchyroll",
+      "description": "Dive into unlimited anime with Crunchyroll Premium, offering ad-free streaming, offline viewing, and smooth access across your devices — all backed by full warranty.",
+      "image": "AgACAgUAAxkBAAIJumofW4QcRomTaZmhe9WWVqOYkKUCAAJdEGsbodABVYvJQDlZZFJsAQADAgADeQADOwQ",
+      "plans": [
+        {
+          "id": "617ae4",
+          "name": "12 Months",
+          "price": "$65",
+          "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5913528148154126357"
+    },
+    "1305d148": {
+      "category": "software",
+      "name": "Canva Pro",
+      "description": "Canva Pro gives you access to premium designs, brand tools, and high-quality content for effortless creation, with full warranty included.",
+      "image": "AgACAgUAAxkBAAIKoWogCcYR6-S9qXUxLNvh0KZ0w9BNAALQD2sb_HcAAVU3jpX5YI60NQEAAwIAA3kAAzsE",
+      "plans": [
+        {
+          "id": "b94570",
+          "name": "12 Months",
+          "price": "$60",
+          "image": "AgACAgUAAxkBAAIJLmofVQ0AAVYjj3mgHQ_yqEAsLrl_NQACVxBrG6HQAVUAAa9DxDgewBsBAAMCAAN5AAM7BA",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5900192223160438756"
+    },
+    "24e1c5ed": {
+      "category": "software",
+      "name": "Creative Cloud",
+      "description": "Unlock industry-leading creativity with Adobe Creative Cloud, featuring professional tools for design, video, photography, and more — fully backed by warranty.",
+      "image": "AgACAgUAAxkBAAIKvWogC8NNXmCeQP_gfoONbhA4_6frAALWD2sb_HcAAVVvG-allXLfpwEAAwIAA3kAAzsE",
+      "plans": [
+        {
+          "id": "fea44b",
+          "name": "4 Months",
+          "price": "$65",
+          "image": "AgACAgUAAxkBAAIKx2ogDI_373ntgoJnrAzrWiGI4p8MAALYD2sb_HcAAVWE_tpAz4lzyAEAAwIAA3kAAzsE",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "f08804",
+          "name": "12 Months",
+          "price": "$125",
+          "image": "AgACAgUAAxkBAAIJLmofVQ0AAVYjj3mgHQ_yqEAsLrl_NQACVxBrG6HQAVUAAa9DxDgewBsBAAMCAAN5AAM7BA",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5879697188979740680"
+    },
+    "3af4a741": {
+      "category": "vpn",
+      "name": "Nord VPN",
+      "description": "Protect your online privacy with NordVPN, offering fast, secure, and private browsing across all devices — fully backed by warranty.",
+      "image": "AgACAgUAAxkBAAIK6WogDwsY1gc8AAFALeQWm-nPN3GJ1gAC3Q9rG_x3AAFVhbQrrl3Ncl8BAAMCAAN5AAM7BA",
+      "plans": [
+        {
+          "id": "5bcf96",
+          "name": "3 Months",
+          "price": "$25",
+          "image": "AgACAgUAAxkBAAIJTWofVw88VvOkmODvZEGtiOnWVrBJAAJaEGsbodABVfwiiNztZxgJAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5879826927056850883"
+    },
+    "4235a775": {
+      "category": "smm",
+      "name": "Followers",
+      "description": "Instagram Services",
+      "image": null,
+      "plans": [
+        {
+          "id": "bfbde6",
+          "name": "Followers",
+          "price": "$23",
+          "image": null,
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5872739299010547430"
+    },
+    "cd26311c": {
+      "category": "ai",
+      "name": "ChatGPT",
+      "description": "ChatGPT Plus gives you faster responses, priority access during peak times, and access to advanced AI models for better, more accurate answers.",
+      "image": "AgACAgUAAxkBAAIRJ2o3pM0mBw9IisKgiMsCS7VeVJxNAAIjE2sb8-7AVeq3fqHoJfj6AQADAgADeQADPAQ",
+      "plans": [
+        {
+          "id": "9553b1",
+          "name": "1 Month",
+          "price": "$15",
+          "image": "AgACAgUAAxkBAAIRMWo3pVowo45bvCz1kRzNUBB1f6kAAyYTaxvz7sBV696gib89O7MBAAMCAAN5AAM8BA",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5877651964208091297"
+    },
+    "5562656c": {
+      "category": "ai",
+      "name": "Perplexity",
+      "description": "Need fast, reliable answers without digging through dozens of links? Perplexity Pro combines AI and real-time web data to give you clear, well-sourced results in seconds.",
+      "image": "AgACAgUAAxkBAAIRQGo3q30HQHpryPSmyt_DQSNNoPqvAAJdE2sb8-7AVWYwNnNdHlcxAQADAgADeQADPAQ",
+      "plans": [
+        {
+          "id": "f304fb",
+          "name": "1 Month",
+          "price": "$12",
+          "image": "AgACAgUAAxkBAAIRSGo3q9SDLFRxAycNBcbuG0oz5yXWAAJhE2sb8-7AVZTeYquTqnKdAQADAgADeQADPAQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "4861db",
+          "name": "12 Months",
+          "price": "$75",
+          "image": "AgACAgUAAxkBAAIRUWo3q_5sYgla7eNvQ024OZIbVmspAAJpE2sb8-7AVdtKIB25N5DEAQADAgADeQADPAQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": true,
+      "emoji_id": "5386400897746100321"
+    },
+    "ab05ee54": {
+      "category": "ai",
+      "name": "Replit Pro",
+      "description": "Replit Pro includes faster AI assistance, higher usage limits, private Repls, improved performance, additional compute resources, custom domains, always-on deployments, advanced collaboration tools, and priority access to the latest features.",
+      "image": "AgACAgUAAxkBAAIRmGo5PUWqAy_F1g7NhJJRqPHNUGzrAAJIGmsb8-7IVZIqPjfAw9wCAQADAgADeQADPAQ",
+      "plans": [
+        {
+          "id": "0666e7",
+          "name": "1 Month",
+          "price": "$35",
+          "image": "AgACAgUAAxkBAAIRomo5P_dqW23hVM_OODiQk_LGfEzLAAJkGmsb8-7IVUjAh5SkFZOMAQADAgADeQADPAQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "6105050957609968229"
+    }
+  }
+}

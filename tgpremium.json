@@ -1,0 +1,26 @@
+{
+  "select_text": "Please select how many months you would like to buy.",
+  "select_image": "AgACAgUAAxkBAAIItGofS7oOihn6zErgENqZiZxuwJg0AAJPEGsbodABVfLR8Nbym15gAQADAgADeQADOwQ",
+  "username_text": "Please Type the USERNAME On Which You Want The Telegram Premium",
+  "username_image": "AgACAgUAAxkBAAIIumofTJst3Rx7bwpIYjFzXju5OmMvAAJQEGsbodABVZPsFrR5AAEkYwEAAwIAA3kAAzsE",
+  "plans": [
+    {
+      "id": "m3",
+      "name": "3 Months",
+      "price": "$30",
+      "image": "AgACAgUAAxkBAAIIwmofTOwYssHT8MtxOd2HtDOFlu_IAAJREGsbodABVe44Ulz8mlkCAQADAgADeQADOwQ"
+    },
+    {
+      "id": "m6",
+      "name": "6 Months",
+      "price": "$45",
+      "image": "AgACAgUAAxkBAAIIxGofTQrkU7xDOTIwMIB2TO2elJqRAAJSEGsbodABVVvDDBDYsKkIAQADAgADeQADOwQ"
+    },
+    {
+      "id": "m12",
+      "name": "12 Months",
+      "price": "$60",
+      "image": "AgACAgUAAxkBAAIIxmofTSTl-WcVwt363YcwvSVMEhhCAAJTEGsbodABVTNhMpJhS3H_AQADAgADeQADOwQ"
+    }
+  ]
+}

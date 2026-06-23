@@ -1,0 +1,18 @@
+{
+  "welcome_text": "Welcome to Premium Villa,\n\nPremium services at exceptional value — explore our exclusive offerings below.",
+  "welcome_image": "AgACAgUAAxkBAAIIbGofSfsxiOHbrdID2uSzZDc4ZhHYAAJNEGsbodABVbN01gZIg3UMAQADAgADeQADOwQ",
+  "viewcart_added": true,
+  "category_images": {
+    "ott": "AgACAgUAAxkBAAIIcWofSkMTTEHhlN4muFU8aPgvOJ4uAAJOEGsbodABVScX3wO4kNfoAQADAgADeQADOwQ",
+    "software": "AgACAgUAAxkBAAIKmWof80jDHziVoIpqjjWUG-ad0VmOAAKWD2sb_HcAAVUwoHGXmUadDAEAAwIAA3kAAzsE",
+    "vpn": "AgACAgUAAxkBAAIK_2ogECyOBUDfR6sYi2_5VFOqjMe5AALfD2sb_HcAAVU-eiuOe565xAEAAwIAA3kAAzsE",
+    "smm": "AgACAgUAAxkBAAIMImogVGlYnnVuKKenT6sxpygbFEcXAALgDWsb_HcIVWyWce_UxZl0AQADAgADeQADOwQ",
+    "ai": "AgACAgUAAxkBAAIRtmo5QOriWdX4aJl3ek69btctfnZgAAJzGmsb8-7IVRub3Yw5djtmAQADAgADeQADPAQ"
+  },
+  "category_intro": {
+    "ott": "Choose A Product :",
+    "vpn": "Choose A Product :",
+    "software": "Choose A Product :",
+    "ai": "Choose A Product :"
+  }
+}
