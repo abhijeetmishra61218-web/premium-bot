@@ -607,6 +607,37 @@ Info:
 """
     await update.message.reply_text(commands_list)
 
+async def cmd_users(update, context):
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("This command is only for admins.")
+        return
+
+    users = store.load_users()
+    if not users:
+        await update.message.reply_text("No users yet.")
+        return
+
+    lines = [f"Total users: {len(users)}\n"]
+    for uid, u in users.items():
+        username = u.get("username")
+        first_name = u.get("first_name") or ""
+        uname_display = f"@{username}" if username else "(no username)"
+        lines.append(f"{uname_display} - {first_name} - ID: {uid}")
+
+    text = "\n".join(lines)
+
+    if len(text) <= 4096:
+        await update.message.reply_text(text)
+    else:
+        chunk = ""
+        for line in lines:
+            if len(chunk) + len(line) + 1 > 4000:
+                await update.message.reply_text(chunk)
+                chunk = ""
+            chunk += line + "\n"
+        if chunk:
+            await update.message.reply_text(chunk)
+
 async def cmd_wallet(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
@@ -2866,6 +2897,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("getid", cmd_getid))
     app.add_handler(CommandHandler("commands", cmd_commands))
+    app.add_handler(CommandHandler("users", cmd_users))
     app.add_handler(CommandHandler("wallet", cmd_wallet))
     app.add_handler(CommandHandler("remove", cmd_remove))
     app.add_handler(CommandHandler("add", cmd_add))
