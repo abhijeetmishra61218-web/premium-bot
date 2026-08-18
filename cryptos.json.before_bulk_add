@@ -1,0 +1,32 @@
+{
+  "cryptos": [
+    {
+      "id": "db1ed8f7",
+      "name": "BTC",
+      "enabled": true,
+      "oxapay_currency": "BTC",
+      "oxapay_network": "Bitcoin",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "2e4f3d62",
+      "name": "USDT (TRC20)",
+      "enabled": true,
+      "oxapay_currency": "USDT",
+      "oxapay_network": "Tron",
+      "emoji_id": null
+    },
+    {
+      "id": "491147e4",
+      "name": "USDT (BSC)",
+      "enabled": true,
+      "oxapay_currency": "USDT",
+      "oxapay_network": "BSC",
+      "emoji_id": null
+    }
+  ],
+  "merchant_api_key": "",
+  "picker_text": "Please choose your preferred cryptocurrency for payment",
+  "pay_image": null,
+  "wallet_image": null
+}

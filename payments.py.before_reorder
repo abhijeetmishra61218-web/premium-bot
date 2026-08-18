@@ -92,21 +92,6 @@ def _save_crypto(updated):
             break
     save_cryptos(data)
 
-def _move_crypto(cid, direction):
-    """direction: -1 to move up (earlier), +1 to move down (later).
-    Display order on the buyer picker screen follows this list order."""
-    data = load_cryptos()
-    items = data["cryptos"]
-    idx = next((i for i, c in enumerate(items) if c["id"] == cid), None)
-    if idx is None:
-        return False
-    new_idx = idx + direction
-    if new_idx < 0 or new_idx >= len(items):
-        return False
-    items[idx], items[new_idx] = items[new_idx], items[idx]
-    save_cryptos(data)
-    return True
-
 # ========================= merchant key =========================
 def get_merchant_key():
     env_key = oxapay_client.get_env_key()
@@ -262,8 +247,6 @@ def crypto_panel(cid):
     toggle = "Disable" if c.get("enabled") else "Enable"
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("🎨 Set Animated Emoji", callback_data="pay:emoji:" + cid)],
-        [InlineKeyboardButton("⬆️ Move Up", callback_data="pay:up:" + cid),
-         InlineKeyboardButton("⬇️ Move Down", callback_data="pay:dn:" + cid)],
         [InlineKeyboardButton("🔘 " + toggle, callback_data="pay:tgl:" + cid)],
         [InlineKeyboardButton("🗑️ Remove", callback_data="pay:rm:" + cid)],
         [InlineKeyboardButton("🔙 Back", callback_data="pay:admin")],
@@ -1159,17 +1142,6 @@ async def _on_callback(update, context):
                          f"4. Send that ID here\n\n"
                          f"Or send 0 to REMOVE the current emoji.")
         await query.answer()
-        raise ApplicationHandlerStop
-
-    if action.startswith("up:") or action.startswith("dn:"):
-        direction = -1 if action.startswith("up:") else 1
-        cid = action.split(":", 1)[1]
-        moved = _move_crypto(cid, direction)
-        res = crypto_panel(cid)
-        if res:
-            text, kb = res
-            await _safe_edit(query, context, text, kb)
-        await query.answer("Moved" if moved else "Already at that end")
         raise ApplicationHandlerStop
 
     if action.startswith("tgl:"):

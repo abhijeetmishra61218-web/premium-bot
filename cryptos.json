@@ -1,69 +1,232 @@
 {
   "cryptos": [
     {
-      "id": "btc",
+      "id": "db1ed8f7",
       "name": "BTC",
-      "chain": "btc",
-      "address": "1H9iKQCCEwBweoKPzv5xsjBtp4U8gBvCby",
-      "coingecko_id": "bitcoin",
-      "decimals": 8,
       "enabled": true,
-      "min_conf": 1,
-      "is_usd_stable": false,
-      "token_contract": null,
-      "emoji_id": "5829938927703691622"
+      "oxapay_currency": "BTC",
+      "oxapay_network": "Bitcoin",
+      "emoji_id": "🪙"
     },
     {
-      "id": "usdt_bep20",
-      "name": "USDT(Bep20)",
-      "chain": "bep20",
-      "address": "0x60E4D2cB2983Daee3b282Be0aA7bB8b46753D8dB",
-      "coingecko_id": "tether",
-      "decimals": 18,
+      "id": "2e4f3d62",
+      "name": "USDT (TRC20)",
       "enabled": true,
-      "min_conf": 12,
-      "is_usd_stable": true,
-      "token_contract": "0x55d398326f99059fF775485246999027B3197955",
-      "emoji_id": "5829978819359937589"
+      "oxapay_currency": "USDT",
+      "oxapay_network": "Tron",
+      "emoji_id": "🪙"
     },
     {
-      "id": "usdt_trc20",
-      "name": "USDT(Trc20)",
-      "chain": "trc20",
-      "address": "TZ78AVBkZyuNwu4DEko4pt72L7bGbxgcxT",
-      "coingecko_id": "tether",
-      "decimals": 6,
+      "id": "491147e4",
+      "name": "USDT (BSC)",
       "enabled": true,
-      "min_conf": 20,
-      "is_usd_stable": true,
-      "token_contract": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
-      "emoji_id": "5832577678300943429"
+      "oxapay_currency": "USDT",
+      "oxapay_network": "BSC",
+      "emoji_id": "🪙"
     },
     {
-      "id": "ltc",
+      "id": "8c3c8ff3",
+      "name": "ETH (BSC)",
+      "enabled": false,
+      "oxapay_currency": "ETH",
+      "oxapay_network": "BSC",
+      "emoji_id": null
+    },
+    {
+      "id": "2f3bb507",
+      "name": "ETH (Base)",
+      "enabled": false,
+      "oxapay_currency": "ETH",
+      "oxapay_network": "Base",
+      "emoji_id": null
+    },
+    {
+      "id": "62398f9c",
+      "name": "ETH (ETH)",
+      "enabled": true,
+      "oxapay_currency": "ETH",
+      "oxapay_network": "Ethereum",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "674be738",
+      "name": "USDT (ETH)",
+      "enabled": true,
+      "oxapay_currency": "USDT",
+      "oxapay_network": "Ethereum",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "82c67999",
+      "name": "USDT (SOL)",
+      "enabled": true,
+      "oxapay_currency": "USDT",
+      "oxapay_network": "Solana",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "054bee02",
+      "name": "USDT (POL)",
+      "enabled": false,
+      "oxapay_currency": "USDT",
+      "oxapay_network": "Polygon",
+      "emoji_id": null
+    },
+    {
+      "id": "91d23475",
+      "name": "USDT (The Open Network)",
+      "enabled": false,
+      "oxapay_currency": "USDT",
+      "oxapay_network": "The Open Network",
+      "emoji_id": null
+    },
+    {
+      "id": "06a5f726",
+      "name": "USDC (ETH)",
+      "enabled": true,
+      "oxapay_currency": "USDC",
+      "oxapay_network": "Ethereum",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "74aa957e",
+      "name": "USDC (BSC)",
+      "enabled": true,
+      "oxapay_currency": "USDC",
+      "oxapay_network": "BSC",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "e2b787a6",
+      "name": "USDC (SOL)",
+      "enabled": true,
+      "oxapay_currency": "USDC",
+      "oxapay_network": "Solana",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "53dffe23",
+      "name": "USDC (POL)",
+      "enabled": false,
+      "oxapay_currency": "USDC",
+      "oxapay_network": "Polygon",
+      "emoji_id": null
+    },
+    {
+      "id": "f18b7ed4",
+      "name": "USDC (Base)",
+      "enabled": false,
+      "oxapay_currency": "USDC",
+      "oxapay_network": "Base",
+      "emoji_id": null
+    },
+    {
+      "id": "e1dd6dbc",
       "name": "LTC",
-      "chain": "ltc",
-      "address": "ltc1qu06mz8lygjzffhnfpwmeyvm6kfnwzj0srg0vla",
-      "coingecko_id": "litecoin",
-      "decimals": 8,
       "enabled": true,
-      "min_conf": 2,
-      "is_usd_stable": false,
-      "token_contract": null,
-      "emoji_id": "5829979991886011025"
+      "oxapay_currency": "LTC",
+      "oxapay_network": "Litecoin",
+      "emoji_id": "🪙"
     },
     {
-      "id": "sol",
+      "id": "d5e814fc",
       "name": "SOL",
-      "chain": "sol",
-      "address": "",
-      "coingecko_id": "solana",
-      "decimals": 9,
       "enabled": true,
-      "min_conf": 1,
-      "is_usd_stable": false,
-      "token_contract": null,
+      "oxapay_currency": "SOL",
+      "oxapay_network": "Solana",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "f5fd8f44",
+      "name": "POL",
+      "enabled": true,
+      "oxapay_currency": "POL",
+      "oxapay_network": "Polygon",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "d71c9cca",
+      "name": "TRX",
+      "enabled": true,
+      "oxapay_currency": "TRX",
+      "oxapay_network": "Tron",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "c19d9b95",
+      "name": "XMR",
+      "enabled": true,
+      "oxapay_currency": "XMR",
+      "oxapay_network": "Monero",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "c69c202a",
+      "name": "GRAM",
+      "enabled": true,
+      "oxapay_currency": "GRAM",
+      "oxapay_network": "The Open Network",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "92225836",
+      "name": "BNB",
+      "enabled": true,
+      "oxapay_currency": "BNB",
+      "oxapay_network": "BSC",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "ed03e59b",
+      "name": "DOGE",
+      "enabled": true,
+      "oxapay_currency": "DOGE",
+      "oxapay_network": "Dogecoin",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "5b0790e0",
+      "name": "NOT",
+      "enabled": false,
+      "oxapay_currency": "NOT",
+      "oxapay_network": "The Open Network",
+      "emoji_id": null
+    },
+    {
+      "id": "c393d5c5",
+      "name": "DOGS",
+      "enabled": true,
+      "oxapay_currency": "DOGS",
+      "oxapay_network": "The Open Network",
+      "emoji_id": "🐶"
+    },
+    {
+      "id": "71e44b81",
+      "name": "SHIB (ETH)",
+      "enabled": true,
+      "oxapay_currency": "SHIB",
+      "oxapay_network": "Ethereum",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "a8443e86",
+      "name": "SHIB (BSC)",
+      "enabled": true,
+      "oxapay_currency": "SHIB",
+      "oxapay_network": "BSC",
+      "emoji_id": "🪙"
+    },
+    {
+      "id": "39d8edf9",
+      "name": "XRP",
+      "enabled": false,
+      "oxapay_currency": "XRP",
+      "oxapay_network": "xrpl",
       "emoji_id": null
     }
-  ]
+  ],
+  "merchant_api_key": "",
+  "picker_text": "Please choose your preferred cryptocurrency for payment",
+  "pay_image": null,
+  "wallet_image": null
 }

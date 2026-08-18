@@ -24,3 +24,4 @@ used_hashes.json
 wallets.json
 botstate.json
 smmdata.json
+start_bots.sh

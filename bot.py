@@ -15,6 +15,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     MessageHandler,
     filters,
+    PicklePersistence,
 )
 
 import smm
@@ -2886,7 +2887,12 @@ def main():
 
     ensure_viewcart_button()
 
-    app = Application.builder().token(BOT_TOKEN).build()
+    persistence = PicklePersistence(filepath=os.path.join(BASE_DIR, "bot_persistence.pkl"), update_interval=1)
+
+    async def _post_init(application):
+        await payments.resume_pending_orders(application)
+
+    app = Application.builder().token(BOT_TOKEN).persistence(persistence).post_init(_post_init).build()
     cart.setup(app, ADMIN_ID)
     smm.setup(app, ADMIN_ID, BOT_TOKEN)
     payments.setup(app, ADMIN_ID, BOT_TOKEN)

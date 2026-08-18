@@ -67,7 +67,7 @@ def build_order_notification(record):
         "Plan : " + (", ".join(plans) if plans else "-"),
         "Order id : " + _esc(record.get("order_id")),
         "Crypto : " + _esc(record.get("crypto") or "-"),
-        "Transaction Hash : " + _esc(record.get("hash") or "-"),
+        "OxaPay Track ID : " + _esc(record.get("hash") or "-"),
         "Customer Username : " + ("@" + _esc(uname) if uname else "-"),
         "Customer Userid : " + _esc(record.get("user_id")),
     ]
