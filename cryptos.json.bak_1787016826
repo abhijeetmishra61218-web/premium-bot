@@ -6,7 +6,7 @@
       "enabled": true,
       "oxapay_currency": "BTC",
       "oxapay_network": "Bitcoin",
-      "emoji_id": "5829938927703691622"
+      "emoji_id": "🪙"
     },
     {
       "id": "2e4f3d62",
@@ -14,7 +14,7 @@
       "enabled": true,
       "oxapay_currency": "USDT",
       "oxapay_network": "Tron",
-      "emoji_id": "5832692572971077565"
+      "emoji_id": "🪙"
     },
     {
       "id": "491147e4",
@@ -22,7 +22,7 @@
       "enabled": true,
       "oxapay_currency": "USDT",
       "oxapay_network": "BSC",
-      "emoji_id": "5829978819359937589"
+      "emoji_id": "🪙"
     },
     {
       "id": "8c3c8ff3",
@@ -46,7 +46,7 @@
       "enabled": true,
       "oxapay_currency": "ETH",
       "oxapay_network": "Ethereum",
-      "emoji_id": "5830292326202741807"
+      "emoji_id": "🪙"
     },
     {
       "id": "674be738",
@@ -54,7 +54,7 @@
       "enabled": true,
       "oxapay_currency": "USDT",
       "oxapay_network": "Ethereum",
-      "emoji_id": "5830292326202741807"
+      "emoji_id": "🪙"
     },
     {
       "id": "82c67999",
@@ -62,7 +62,7 @@
       "enabled": true,
       "oxapay_currency": "USDT",
       "oxapay_network": "Solana",
-      "emoji_id": "5829944446736667124"
+      "emoji_id": "🪙"
     },
     {
       "id": "054bee02",
@@ -86,7 +86,7 @@
       "enabled": true,
       "oxapay_currency": "USDC",
       "oxapay_network": "Ethereum",
-      "emoji_id": "5830292326202741807"
+      "emoji_id": "🪙"
     },
     {
       "id": "74aa957e",
@@ -94,7 +94,7 @@
       "enabled": true,
       "oxapay_currency": "USDC",
       "oxapay_network": "BSC",
-      "emoji_id": "5829978819359937589"
+      "emoji_id": "🪙"
     },
     {
       "id": "e2b787a6",
@@ -102,7 +102,7 @@
       "enabled": true,
       "oxapay_currency": "USDC",
       "oxapay_network": "Solana",
-      "emoji_id": "5829944446736667124"
+      "emoji_id": "🪙"
     },
     {
       "id": "53dffe23",
@@ -126,7 +126,7 @@
       "enabled": true,
       "oxapay_currency": "LTC",
       "oxapay_network": "Litecoin",
-      "emoji_id": "5829979991886011025"
+      "emoji_id": "🪙"
     },
     {
       "id": "d5e814fc",
@@ -134,7 +134,7 @@
       "enabled": true,
       "oxapay_currency": "SOL",
       "oxapay_network": "Solana",
-      "emoji_id": "5829944446736667124"
+      "emoji_id": "🪙"
     },
     {
       "id": "f5fd8f44",
@@ -142,7 +142,7 @@
       "enabled": true,
       "oxapay_currency": "POL",
       "oxapay_network": "Polygon",
-      "emoji_id": "5830130569144439663"
+      "emoji_id": "🪙"
     },
     {
       "id": "d71c9cca",
@@ -150,7 +150,7 @@
       "enabled": true,
       "oxapay_currency": "TRX",
       "oxapay_network": "Tron",
-      "emoji_id": "5832692572971077565"
+      "emoji_id": "🪙"
     },
     {
       "id": "c19d9b95",
@@ -158,7 +158,7 @@
       "enabled": true,
       "oxapay_currency": "XMR",
       "oxapay_network": "Monero",
-      "emoji_id": "5832541789554217923"
+      "emoji_id": "🪙"
     },
     {
       "id": "c69c202a",
@@ -166,7 +166,7 @@
       "enabled": true,
       "oxapay_currency": "GRAM",
       "oxapay_network": "The Open Network",
-      "emoji_id": "5832365227743646230"
+      "emoji_id": "🪙"
     },
     {
       "id": "92225836",
@@ -174,7 +174,7 @@
       "enabled": true,
       "oxapay_currency": "BNB",
       "oxapay_network": "BSC",
-      "emoji_id": "5829978819359937589"
+      "emoji_id": "🪙"
     },
     {
       "id": "ed03e59b",
@@ -182,7 +182,7 @@
       "enabled": true,
       "oxapay_currency": "DOGE",
       "oxapay_network": "Dogecoin",
-      "emoji_id": "5830258765328290291"
+      "emoji_id": "🪙"
     },
     {
       "id": "5b0790e0",
@@ -198,7 +198,7 @@
       "enabled": true,
       "oxapay_currency": "DOGS",
       "oxapay_network": "The Open Network",
-      "emoji_id": "5798638778008475435"
+      "emoji_id": "🐶"
     },
     {
       "id": "71e44b81",
@@ -206,7 +206,7 @@
       "enabled": true,
       "oxapay_currency": "SHIB",
       "oxapay_network": "Ethereum",
-      "emoji_id": "5830292326202741807"
+      "emoji_id": "🪙"
     },
     {
       "id": "a8443e86",
@@ -214,7 +214,7 @@
       "enabled": true,
       "oxapay_currency": "SHIB",
       "oxapay_network": "BSC",
-      "emoji_id": "5829978819359937589"
+      "emoji_id": "🪙"
     },
     {
       "id": "39d8edf9",

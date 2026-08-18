@@ -92,8 +92,9 @@ def _build_raw_keyboard(rows_spec):
                 "text": btn["text"],
                 "callback_data": btn["callback_data"],
             }
-            if btn.get("emoji_id"):
-                raw_btn["icon_custom_emoji_id"] = btn["emoji_id"]
+            eid = btn.get("emoji_id")
+            if eid and str(eid).isdigit():
+                raw_btn["icon_custom_emoji_id"] = eid
             raw_row.append(raw_btn)
         raw_rows.append(raw_row)
     return {"inline_keyboard": raw_rows}

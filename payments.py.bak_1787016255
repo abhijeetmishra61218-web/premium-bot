@@ -172,22 +172,11 @@ def _build_raw_keyboard(rows_spec):
         raw_row = []
         for btn in row:
             raw_btn = {"text": btn["text"], "callback_data": btn["callback_data"]}
-            eid = btn.get("emoji_id")
-            if eid and str(eid).isdigit():
-                raw_btn["icon_custom_emoji_id"] = eid
+            if btn.get("emoji_id"):
+                raw_btn["icon_custom_emoji_id"] = btn["emoji_id"]
             raw_row.append(raw_btn)
         raw_rows.append(raw_row)
     return {"inline_keyboard": raw_rows}
-
-class TelegramRawError(Exception):
-    pass
-
-def _raw_check(resp_json, what):
-    if isinstance(resp_json, dict) and resp_json.get("ok") is False:
-        desc = resp_json.get("description")
-        print(f"[payments] Telegram API rejected {what}: {desc}")
-        raise TelegramRawError(f"{what}: {desc}")
-    return resp_json
 
 async def raw_send_message(chat_id, text, keyboard_rows, photo=None, parse_mode="HTML"):
     global TG_API, BOT_TOKEN
@@ -201,14 +190,14 @@ async def raw_send_message(chat_id, text, keyboard_rows, photo=None, parse_mode=
         }
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.post(f"{TG_API}/sendPhoto", json=payload)
-        return _raw_check(r.json(), "sendPhoto")
+        return r.json()
     payload = {
         "chat_id": chat_id, "text": text, "parse_mode": parse_mode,
         "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.post(f"{TG_API}/sendMessage", json=payload)
-    return _raw_check(r.json(), "sendMessage")
+    return r.json()
 
 async def raw_edit_message(chat_id, message_id, text, keyboard_rows, photo=None, parse_mode="HTML"):
     global TG_API, BOT_TOKEN
@@ -223,14 +212,14 @@ async def raw_edit_message(chat_id, message_id, text, keyboard_rows, photo=None,
         }
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.post(f"{TG_API}/editMessageMedia", json=payload)
-        return _raw_check(r.json(), "editMessageMedia")
+        return r.json()
     payload = {
         "chat_id": chat_id, "message_id": message_id, "text": text,
         "parse_mode": parse_mode, "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.post(f"{TG_API}/editMessageText", json=payload)
-    return _raw_check(r.json(), "editMessageText")
+    return r.json()
 
 # ========================= admin panels =========================
 def admin_home_panel():
@@ -371,36 +360,18 @@ def _amount_display(order):
 
 # ========== PICKER SCREEN WITH ANIMATED EMOJIS using RAW API ==========
 def _build_crypto_buttons_raw(cryptos):
-    # Group same-coin chain variants together (all USDT chains together,
-    # all ETH chains together, all USDC chains together, SOL together),
-    # BTC first, everything else keeps its existing relative order after.
-    PRIORITY = {"BTC": 0, "USDT": 1, "ETH": 2, "USDC": 3, "SOL": 4}
-    ordered = sorted(cryptos, key=lambda c: PRIORITY.get(c.get("oxapay_currency", ""), 5))
-
     rows = []
     current_row = []
-    current_group = None
-
-    def flush():
-        nonlocal current_row
-        if current_row:
-            rows.append(current_row)
-            current_row = []
-
-    for c in ordered:
-        group = c.get("oxapay_currency", "")
-        has_chain = "(" in c.get("name", "")
-        cap = 2 if has_chain else 3  # chain-labeled buttons get double-size (2/row)
-        if group != current_group:
-            flush()
-            current_group = group
-        elif len(current_row) >= cap:
-            flush()
+    for c in cryptos:
         button = {"text": c["name"], "callback_data": "pay:pick:" + c["id"]}
         if c.get("emoji_id"):
             button["emoji_id"] = c["emoji_id"]
         current_row.append(button)
-    flush()
+        if len(current_row) >= 3:
+            rows.append(current_row)
+            current_row = []
+    if current_row:
+        rows.append(current_row)
     return rows
 
 def _picker_screen_raw(is_admin=False, show_wallet=False, wallet_balance=0.0, note=None):
