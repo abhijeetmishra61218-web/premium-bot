@@ -371,15 +371,13 @@ def _amount_display(order):
 
 # ========== PICKER SCREEN WITH ANIMATED EMOJIS using RAW API ==========
 def _build_crypto_buttons_raw(cryptos):
-    # Group same-coin chain variants together (all USDT chains together,
-    # all ETH chains together, all USDC chains together, SOL together),
-    # BTC first, everything else keeps its existing relative order after.
-    PRIORITY = {"BTC": 0, "USDT": 1, "ETH": 2, "USDC": 3, "SOL": 4}
-    ordered = sorted(cryptos, key=lambda c: PRIORITY.get(c.get("oxapay_currency", ""), 5))
-
+    # BTC gets its own full-width row; USDT (TRC20) through USDC (SOL)
+    # pack 2-per-row (double width) in their existing order; everything
+    # from LTC onward keeps the original default 3-per-row packing.
     rows = []
     current_row = []
-    current_group = None
+    current_cap = None
+    tail_started = False
 
     def flush():
         nonlocal current_row
@@ -387,15 +385,19 @@ def _build_crypto_buttons_raw(cryptos):
             rows.append(current_row)
             current_row = []
 
-    for c in ordered:
-        group = c.get("oxapay_currency", "")
-        has_chain = "(" in c.get("name", "")
-        cap = 2 if has_chain else 3  # chain-labeled buttons get double-size (2/row)
-        if group != current_group:
+    for c in cryptos:
+        currency = c.get("oxapay_currency", "")
+        if not tail_started and currency == "LTC":
+            tail_started = True
+        if tail_started:
+            cap = 3
+        elif currency == "BTC":
+            cap = 1
+        else:
+            cap = 2
+        if cap != current_cap or len(current_row) >= cap:
             flush()
-            current_group = group
-        elif len(current_row) >= cap:
-            flush()
+            current_cap = cap
         button = {"text": c["name"], "callback_data": "pay:pick:" + c["id"]}
         if c.get("emoji_id"):
             button["emoji_id"] = c["emoji_id"]

@@ -12,14 +12,8 @@
     "emoji_id": "5447410659077661506"
   },
   {
-    "id": "tg",
-    "text": "Telegram Premium",
-    "size": "full",
-    "emoji_id": "6136464120779638846"
-  },
-  {
     "id": "software",
-    "text": "Professional Creative Software",
+    "text": "Professional Creative & Carrer Tools",
     "size": "full",
     "emoji_id": "5395444784611480792",
     "callback_data": "open:software"

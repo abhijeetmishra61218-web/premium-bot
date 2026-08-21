@@ -292,8 +292,73 @@
         }
       ],
       "stock": -1,
-      "paused": false,
+      "paused": true,
       "emoji_id": "6105050957609968229"
+    },
+    "30321f03": {
+      "category": "ott",
+      "name": "HBO Max",
+      "description": "Benefits  : Ad-free entertainment, offline downloads, exclusive HBO content & more....",
+      "image": "AgACAgUAAxkBAAIbHWqEBI9hXc6pVYrsODlT9pxbJ2_5AAJHEmsb3b4hVJKgjSJHj5qbAQADAgADeAADPQQ",
+      "plans": [
+        {
+          "id": "e0fbc3",
+          "name": "1 Month",
+          "price": "$10",
+          "image": "AgACAgUAAxkBAAIbJ2qEBQEeQ_aQidpAE10bUdQZ_lE7AAJIEmsb3b4hVFBCsuNKw74-AQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "819081",
+          "name": "12 Months",
+          "price": "$55",
+          "image": "AgACAgUAAxkBAAIbLWqEBS8P9-y7DeD9i_hZOhwebmmpAAJJEmsb3b4hVBmaHB5SyQvQAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5877377880870097204"
+    },
+    "f8114891": {
+      "category": "software",
+      "name": "Linkedin",
+      "description": "Perfect for professionals looking to grow their network and career opportunities",
+      "image": "AgACAgUAAxkBAAIbXmqEBr6aGaf_RDZwHrYc8s6XhfXnAAJREmsb3b4hVDEoW3ZULAc0AQADAgADeAADPQQ",
+      "plans": [
+        {
+          "id": "5dfa1e",
+          "name": "3 Months",
+          "price": "$45",
+          "image": "AgACAgUAAxkBAAIbaWqEBvDnE23L2zNVOKZObt5G8qdLAAJTEmsb3b4hVEcLd1VTdB90AQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5882148571628704558"
+    },
+    "8a0baf8a": {
+      "category": "software",
+      "name": "Coursera Plus",
+      "description": "Coursera Plus gives you unlimited access to thousands of courses, professional certificates, and career-focused learning programs for one subscription",
+      "image": "AgACAgUAAxkBAAIb62qGfjyw4UvNT3r6oO_q5mxHDjh6AAKnEmsbivc4VAX3T2y74LdtAQADAgADeAADPQQ",
+      "plans": [
+        {
+          "id": "490e6f",
+          "name": "12 Months",
+          "price": "$125",
+          "image": "AgACAgUAAxkBAAIb-GqGfpziVld3bKPsFQlQnmlpIv4DAAKqEmsbivc4VD64T0ISjUuEAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "6066879122234153653"
     }
   }
 }
