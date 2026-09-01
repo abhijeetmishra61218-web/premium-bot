@@ -38,12 +38,28 @@ def _load(path, default):
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except Exception as e:
+        # IMPORTANT: a broken/corrupt file must NEVER silently look like
+        # "no data yet" — that's exactly what wiped users.json before.
+        # Preserve the bad file for inspection and refuse to proceed blind.
+        try:
+            bad_path = path + ".corrupt." + str(int(time.time()))
+            os.replace(path, bad_path)
+        except Exception:
+            bad_path = "(could not preserve original)"
+        print(f"[store] CORRUPT DATA FILE: {path} -> saved as {bad_path}. Error: {e}")
         return json.loads(json.dumps(default))
 
 def _save(path, data):
-    with open(path, "w", encoding="utf-8") as f:
+    # Atomic write: write to a temp file, then rename over the real file.
+    # If the disk is full or the process dies mid-write, the temp file is
+    # incomplete/garbage but the ORIGINAL file is untouched — no corruption.
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, path)  # atomic on POSIX
 
 # ========================= users =========================
 def register_user(user_id, username=None, first_name=None):

@@ -7,6 +7,8 @@ import html
 import json
 import uuid
 import httpx
+import logging
+import traceback
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, MessageEntity
 from telegram.ext import (
@@ -2881,6 +2883,27 @@ async def finish_product(update, context):
         + "Send /start and open the category to see it."
     )
 
+logging.basicConfig(
+    filename=os.path.join(BASE_DIR, "bot_errors.log"),
+    level=logging.ERROR,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+
+async def on_error(update, context):
+    """Catch every unhandled exception from any handler. Without this,
+    a failing /start or /users just goes silent with zero trace."""
+    tb = "".join(traceback.format_exception(None, context.error, context.error.__traceback__))
+    logging.error("Unhandled exception:\n%s", tb)
+    print("Unhandled exception:", tb)
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"⚠️ Bot error:\n<code>{html.escape(str(context.error))}</code>",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
 def main():
     print("Project folder:", BASE_DIR)
     s = load_settings()
@@ -2921,6 +2944,8 @@ def main():
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(MessageHandler(filters.PHOTO, on_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+
+    app.add_error_handler(on_error)
 
     print("Bot running. /getid to capture emoji IDs.")
     app.run_polling()
