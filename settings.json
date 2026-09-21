@@ -1,13 +1,13 @@
 {
   "welcome_text": "Welcome to Premium Villa,\n\nPremium services at exceptional value — explore our exclusive offerings below.",
-  "welcome_image": "AgACAgUAAxkBAAIIbGofSfsxiOHbrdID2uSzZDc4ZhHYAAJNEGsbodABVbN01gZIg3UMAQADAgADeQADOwQ",
+  "welcome_image": "AgACAgUAAxkBAAIktWqwA3z9bRKtNdZlGdBjJDu5kVMkAAIrFmsbUPKBVShFV6hhB4qnAQADAgADeQADPQQ",
   "viewcart_added": true,
   "category_images": {
-    "ott": "AgACAgUAAxkBAAIIcWofSkMTTEHhlN4muFU8aPgvOJ4uAAJOEGsbodABVScX3wO4kNfoAQADAgADeQADOwQ",
-    "software": "AgACAgUAAxkBAAIKmWof80jDHziVoIpqjjWUG-ad0VmOAAKWD2sb_HcAAVUwoHGXmUadDAEAAwIAA3kAAzsE",
-    "vpn": "AgACAgUAAxkBAAIK_2ogECyOBUDfR6sYi2_5VFOqjMe5AALfD2sb_HcAAVU-eiuOe565xAEAAwIAA3kAAzsE",
+    "ott": "AgACAgUAAxkBAAIk0mqwBOj9n7T7CB1_8DMWeK3A51wlAAIzFmsbUPKBVY0ajzwCVDFnAQADAgADeQADPQQ",
+    "software": "AgACAgUAAxkBAAIk3mqwBX-WYK_WI9PtGJh_OGfYIJvnAAI0FmsbUPKBVa_2ydT3dNBkAQADAgADeQADPQQ",
+    "vpn": "AgACAgUAAxkBAAIkzGqwBLXZCpu_ex013pSyQo4sIaFYAAIyFmsbUPKBVT0DXJnkUQM6AQADAgADeQADPQQ",
     "smm": "AgACAgUAAxkBAAIMImogVGlYnnVuKKenT6sxpygbFEcXAALgDWsb_HcIVWyWce_UxZl0AQADAgADeQADOwQ",
-    "ai": "AgACAgUAAxkBAAIRtmo5QOriWdX4aJl3ek69btctfnZgAAJzGmsb8-7IVRub3Yw5djtmAQADAgADeQADPAQ"
+    "ai": "AgACAgUAAxkBAAIk6mqwBeHw3Ne6iDMYfwxKcJnyV034AAI7FmsbUPKBVau-vcwGg5DXAQADAgADeQADPQQ"
   },
   "category_intro": {
     "ott": "Choose A Product :",

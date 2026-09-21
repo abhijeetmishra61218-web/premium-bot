@@ -13,7 +13,7 @@
   },
   {
     "id": "software",
-    "text": "Professional Creative & Carrer Tools",
+    "text": "Creative & Carrer Tools",
     "size": "full",
     "emoji_id": "5395444784611480792",
     "callback_data": "open:software"
@@ -27,7 +27,7 @@
   },
   {
     "id": "ai",
-    "text": "AI Platforms",
+    "text": "AI's",
     "size": "full",
     "callback_data": "open:ai",
     "emoji_id": "5296447931627352804"

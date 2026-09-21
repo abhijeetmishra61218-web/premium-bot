@@ -508,7 +508,7 @@ def _root_screen_rows(user_id):
     if user_id == ADMIN_ID:
         rows.append([{"text": "Manage Platforms", "callback_data": "smmp", "emoji_id": None}])
         rows.append([{"text": "Edit This Page", "callback_data": "smroot", "emoji_id": None}])
-    rows.append([{"text": "Back", "callback_data": "smx", "emoji_id": None}])
+    rows.append([{"text": "Back", "callback_data": "smx", "emoji_id": _action_emoji("back_button")}])
     title = html.escape(cfg.get("title") or "Social Media Services")
     desc = html.escape(cfg.get("desc") or "Choose a platform:")
     text = "<b>" + title + "</b>" + NL + NL + desc
@@ -536,7 +536,7 @@ def _platform_screen_rows(pid, user_id):
             rows.append([{"text": "🎨 Set Service Emojis", "callback_data": "smemoji:" + pid, "emoji_id": None}])
         rows.append([{"text": "✏️ Edit Page Text", "callback_data": "smpt:" + pid, "emoji_id": None}])
         rows.append([{"text": "🖼 Set Page Image", "callback_data": "smpi:" + pid, "emoji_id": None}])
-    rows.append([{"text": "Back", "callback_data": "smr", "emoji_id": None}])
+    rows.append([{"text": "Back", "callback_data": "smr", "emoji_id": _action_emoji("back_button")}])
     intro = p.get("intro") or "Choose a service:"
     text = "<b>" + html.escape(p["name"]) + "</b>" + NL + NL + html.escape(intro)
     return text, rows, p.get("image")
@@ -549,7 +549,7 @@ def _qty_screen_rows(pid, sid, s):
         + html.escape(s["minimum_text"]) + NL + NL
         + "<b>" + html.escape(s["qty_prompt"]) + "</b>"
     )
-    rows = [[{"text": "Back", "callback_data": "smp:" + pid, "emoji_id": None}]]
+    rows = [[{"text": "Back", "callback_data": "smp:" + pid, "emoji_id": _action_emoji("back_button")}]]
     photo = s.get("qty_image") or s.get("image")
     return caption, rows, photo
 
@@ -562,9 +562,20 @@ def _question_screen_rows(pid, s, qty):
         "<b>" + html.escape(s["unit"]) + " : " + _fmt_int(qty) + "</b>" + NL + NL
         + "<b>" + html.escape(s["target_prompt"]) + "</b>"
     )
-    rows = [[{"text": "Back", "callback_data": "sms:" + pid + ":" + s["id"], "emoji_id": None}]]
+    rows = [[{"text": "Back", "callback_data": "sms:" + pid + ":" + s["id"], "emoji_id": _action_emoji("back_button")}]]
     photo = s.get("target_image")
     return caption, rows, photo
+
+def _load_action_emojis():
+    path = os.path.join(BASE_DIR, "action_emojis.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f) or {}
+    except Exception:
+        return {}
+
+def _action_emoji(key):
+    return _load_action_emojis().get(key)
 
 def _confirm_rows(pid, s, qty, target):
     """Confirmation screen. Returns (caption, raw_rows, photo)."""
@@ -578,9 +589,9 @@ def _confirm_rows(pid, s, qty, target):
     lines.append("<b>Total Price : " + _fmt_money(total) + "</b>")
     caption = NL.join(lines)
     rows = [
-        [{"text": "Buy Now", "callback_data": "cart:buysmm", "emoji_id": None}],
-        [{"text": "Add to Cart", "callback_data": "cart:addsmm", "emoji_id": None}],
-        [{"text": "Back", "callback_data": "smp:" + pid, "emoji_id": None}],
+        [{"text": "Buy Now", "callback_data": "cart:buysmm", "emoji_id": _action_emoji("buy_now")}],
+        [{"text": "Add to Cart", "callback_data": "cart:addsmm", "emoji_id": _action_emoji("add_to_cart")}],
+        [{"text": "Back", "callback_data": "smp:" + pid, "emoji_id": _action_emoji("back_button")}],
     ]
     photo = s.get("confirm_image") or s.get("image")
     return caption, rows, photo

@@ -55,7 +55,7 @@
         {
           "id": "c61534",
           "name": "3 Months",
-          "price": "$18",
+          "price": "$12",
           "image": "AgACAgUAAxkBAAIJTWofVw88VvOkmODvZEGtiOnWVrBJAAJaEGsbodABVfwiiNztZxgJAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
@@ -63,7 +63,7 @@
         {
           "id": "e5a895",
           "name": "6 Months",
-          "price": "$32",
+          "price": "$25",
           "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
@@ -71,7 +71,7 @@
         {
           "id": "67f7ae",
           "name": "12 Months",
-          "price": "$70",
+          "price": "$50",
           "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
@@ -90,7 +90,7 @@
         {
           "id": "d7f032",
           "name": "6 Months",
-          "price": "$30",
+          "price": "$25",
           "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
@@ -98,7 +98,7 @@
         {
           "id": "b33510",
           "name": "12 Months",
-          "price": "$60",
+          "price": "$50",
           "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
@@ -117,7 +117,7 @@
         {
           "id": "48b101",
           "name": "6 Months",
-          "price": "$45",
+          "price": "$35",
           "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
@@ -136,7 +136,7 @@
         {
           "id": "617ae4",
           "name": "12 Months",
-          "price": "$65",
+          "price": "$45",
           "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
@@ -174,7 +174,7 @@
         {
           "id": "fea44b",
           "name": "4 Months",
-          "price": "$65",
+          "price": "$55",
           "image": "AgACAgUAAxkBAAIKx2ogDI_373ntgoJnrAzrWiGI4p8MAALYD2sb_HcAAVWE_tpAz4lzyAEAAwIAA3kAAzsE",
           "stock": -1,
           "paused": false
@@ -182,7 +182,7 @@
         {
           "id": "f08804",
           "name": "12 Months",
-          "price": "$125",
+          "price": "$100",
           "image": "AgACAgUAAxkBAAIJLmofVQ0AAVYjj3mgHQ_yqEAsLrl_NQACVxBrG6HQAVUAAa9DxDgewBsBAAMCAAN5AAM7BA",
           "stock": -1,
           "paused": false
@@ -201,7 +201,7 @@
         {
           "id": "5bcf96",
           "name": "3 Months",
-          "price": "$22",
+          "price": "$15",
           "image": "AgACAgUAAxkBAAIJTWofVw88VvOkmODvZEGtiOnWVrBJAAJaEGsbodABVfwiiNztZxgJAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
@@ -272,7 +272,7 @@
           "paused": false
         }
       ],
-      "stock": -1,
+      "stock": 0,
       "paused": true,
       "emoji_id": "5386400897746100321"
     },
@@ -359,6 +359,25 @@
       "stock": -1,
       "paused": false,
       "emoji_id": "6066879122234153653"
+    },
+    "1c62ada2": {
+      "category": "software",
+      "name": "Duolingo",
+      "description": "Learn without limits with Duolingo Premium — enjoy an ad-free experience, unlimited hearts, unlimited practice, and more, delivered to your email with full warranty",
+      "image": "AgACAgUAAxkBAAIid2qq7FQsLppHtjrDMtc2lgZUPDKRAALKGGsbcfVZVZeOAAHJIqPP8wEAAwIAA3kAAz0E",
+      "plans": [
+        {
+          "id": "344b78",
+          "name": "12 Months",
+          "price": "$45",
+          "image": "AgACAgUAAxkBAAIigWqq7N27xRsGEGtJlizUBQmBgJ3uAALAFmsbiEtYVVqoxP3eHX3FAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5796371348808799072"
     }
   }
 }

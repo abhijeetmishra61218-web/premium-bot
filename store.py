@@ -30,6 +30,7 @@ STATE_FILE = os.path.join(BASE_DIR, "botstate.json")
 WALLET_FILE = os.path.join(BASE_DIR, "wallets.json")
 ORDERS_LOG = os.path.join(BASE_DIR, "orders_log.json")
 PRODUCTS_FILE = os.path.join(BASE_DIR, "products.json")
+STOCK_INTEREST_FILE = os.path.join(BASE_DIR, "stock_interest.json")
 
 # ========================= low-level json =========================
 def _load(path, default):
@@ -260,6 +261,30 @@ def update_plan_stock(pid, plan_id, stock):
                 return True
     return False
 
+# ========================= "notify me when back in stock" =========================
+def _stock_interest_key(pid, plan_id=None):
+    return pid + ":" + (plan_id or "_")
+
+def add_stock_interest(pid, plan_id, user_id):
+    data = _load(STOCK_INTEREST_FILE, {})
+    key = _stock_interest_key(pid, plan_id)
+    lst = data.get(key, [])
+    if user_id not in lst:
+        lst.append(user_id)
+        data[key] = lst
+        _save(STOCK_INTEREST_FILE, data)
+
+def get_stock_interest(pid, plan_id=None):
+    data = _load(STOCK_INTEREST_FILE, {})
+    return list(data.get(_stock_interest_key(pid, plan_id), []))
+
+def clear_stock_interest(pid, plan_id=None):
+    data = _load(STOCK_INTEREST_FILE, {})
+    key = _stock_interest_key(pid, plan_id)
+    if key in data:
+        del data[key]
+        _save(STOCK_INTEREST_FILE, data)
+
 def pause_product(pid, paused):
     """Pause/unpause a product (True = paused, False = active)"""
     data = load_products()
@@ -454,7 +479,7 @@ def find_user_by_username(username):
     target_username = username.lower().lstrip('@')
     
     for user_id, user_data in users.items():
-        stored_username = user_data.get('username', '').lower()
+        stored_username = (user_data.get('username') or '').lower()
         if stored_username == target_username:
             return {
                 'user_id': int(user_id),
