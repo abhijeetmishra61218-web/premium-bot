@@ -8,7 +8,6 @@ import html
 import json
 import uuid
 import httpx
-import asyncio
 import logging
 import traceback
 
@@ -81,9 +80,6 @@ DEFAULT_ACTION_EMOJIS = {
     "increment": None,
     "decrement": None,
     "use_wallet": None,
-    "deposit": None,
-    "checkout_more": None,
-    "view_cart": None,
 }
 
 # ========== RAW API HELPERS ==========
@@ -106,39 +102,19 @@ def _build_raw_keyboard(rows_spec):
         raw_rows.append(raw_row)
     return {"inline_keyboard": raw_rows}
 
-async def _raw_post(method, payload, retries=2):
-    """POST to the raw Telegram API with a timeout, retry on network errors,
-    and always log if Telegram itself rejects the call (ok: false) - without
-    this, edits/sends could fail completely silently with no trace anywhere."""
-    last_err = None
-    for attempt in range(retries + 1):
-        try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                r = await client.post(f"{TG_API}/{method}", json=payload)
-            data = r.json()
-            if not data.get("ok"):
-                print(f"[raw_api] {method} rejected by Telegram: {data.get('description')} | payload keys: {list(payload.keys())}")
-            return data
-        except Exception as e:
-            last_err = e
-            if attempt < retries:
-                await asyncio.sleep(0.5 * (attempt + 1))
-                continue
-            print(f"[raw_api] {method} failed after {retries + 1} attempts: {e}")
-            return {"ok": False, "description": str(e)}
-    return {"ok": False, "description": str(last_err)}
-
 async def raw_send_message(chat_id, text, keyboard_rows, photo=None, parse_mode="HTML"):
     if photo:
         return await raw_send_photo(chat_id, photo, text, keyboard_rows, parse_mode)
-
+    
     payload = {
         "chat_id": chat_id,
         "text": text,
         "parse_mode": parse_mode,
         "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
-    return await _raw_post("sendMessage", payload)
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{TG_API}/sendMessage", json=payload)
+    return r.json()
 
 async def raw_send_photo(chat_id, photo, caption, keyboard_rows, parse_mode="HTML"):
     payload = {
@@ -148,7 +124,9 @@ async def raw_send_photo(chat_id, photo, caption, keyboard_rows, parse_mode="HTM
         "parse_mode": parse_mode,
         "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
-    return await _raw_post("sendPhoto", payload)
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{TG_API}/sendPhoto", json=payload)
+    return r.json()
 
 async def raw_edit_message_text(chat_id, message_id, text, keyboard_rows, parse_mode="HTML"):
     payload = {
@@ -158,7 +136,9 @@ async def raw_edit_message_text(chat_id, message_id, text, keyboard_rows, parse_
         "parse_mode": parse_mode,
         "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
-    return await _raw_post("editMessageText", payload)
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{TG_API}/editMessageText", json=payload)
+    return r.json()
 
 async def raw_edit_message_media(chat_id, message_id, photo, caption, keyboard_rows, parse_mode="HTML"):
     payload = {
@@ -167,28 +147,9 @@ async def raw_edit_message_media(chat_id, message_id, photo, caption, keyboard_r
         "media": {"type": "photo", "media": photo, "caption": caption, "parse_mode": parse_mode},
         "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
-    return await _raw_post("editMessageMedia", payload)
-
-async def _show_screen(query, caption, rows, photo):
-    """Render caption+rows(+optional photo) into the current message. Only edits in
-    place when the message's media state already matches the target (both photo, or
-    both text) - Telegram rejects editMessageText on a photo message and vice versa,
-    so any mismatch falls back to delete+resend instead of failing silently."""
-    msg = query.message
-    has_photo_now = bool(msg.photo)
-    if photo and has_photo_now:
-        await raw_edit_message_media(msg.chat_id, msg.message_id, photo, caption, rows)
-    elif not photo and not has_photo_now:
-        await raw_edit_message_text(msg.chat_id, msg.message_id, caption, rows)
-    else:
-        try:
-            await msg.delete()
-        except Exception:
-            pass
-        if photo:
-            await raw_send_photo(msg.chat_id, photo, caption, rows)
-        else:
-            await raw_send_message(msg.chat_id, caption, rows)
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{TG_API}/editMessageMedia", json=payload)
+    return r.json()
 
 # ========== storage helpers ==========
 def load_json(path, default):
@@ -538,24 +499,10 @@ async def safe_edit(query, context, text, reply_markup=None):
         pass
 
 # ========== /start ==========
-def _clear_user_data_keep_order(context):
-    """Like context.user_data.clear(), but doesn't destroy an order the user
-    is still mid-paying - letting a customer bypass the "you have an ongoing
-    order" guard just by navigating back to the main menu. Only "await_payment"
-    counts (a real address+amount has been shown) - "choosing" (picked a
-    product but never actually selected a crypto) is low-stakes and, unlike
-    await_payment, has no deadline/expiry cleanup at all, so treating it as
-    blocking would let it get stuck forever the first time anyone abandons
-    that screen."""
-    pay_order = context.user_data.get("pay_order")
-    context.user_data.clear()
-    if pay_order and pay_order.get("state") == "await_payment":
-        context.user_data["pay_order"] = pay_order
-
 async def start(update, context):
     user = update.effective_user
     store.register_user(user.id, user.username, user.first_name)
-    _clear_user_data_keep_order(context)
+    context.user_data.clear()
     caption = build_welcome_caption(user.first_name)
     menu_rows = build_menu_rows(user.id)
 
@@ -1506,7 +1453,7 @@ async def on_callback(update, context):
     data = query.data
 
     if data == "home":
-        _clear_user_data_keep_order(context)
+        context.user_data.clear()
         msg = query.message
         try:
             await msg.delete()
@@ -1558,7 +1505,7 @@ async def on_callback(update, context):
         return
 
     if data == "tgmenu":
-        _clear_user_data_keep_order(context)
+        context.user_data.clear()
         text, rows, photo = tg_select_screen(user_id)
         try:
             await query.message.delete()
@@ -1607,7 +1554,10 @@ async def on_callback(update, context):
             await query.answer()
             return
         text, rows, photo = category_screen(cat_id, user_id)
-        await _show_screen(query, text, rows, photo)
+        if photo:
+            await raw_edit_message_media(query.message.chat_id, query.message.message_id, photo, text, rows)
+        else:
+            await raw_edit_message_text(query.message.chat_id, query.message.message_id, text, rows)
         await query.answer()
         return
 
@@ -1631,7 +1581,10 @@ async def on_callback(update, context):
             await query.answer("Product not found", show_alert=True)
             return
         caption, rows, photo = screen
-        await _show_screen(query, caption, rows, photo)
+        if photo:
+            await raw_edit_message_media(query.message.chat_id, query.message.message_id, photo, caption, rows)
+        else:
+            await raw_edit_message_text(query.message.chat_id, query.message.message_id, caption, rows)
         await query.answer()
         return
 
@@ -1642,7 +1595,10 @@ async def on_callback(update, context):
             await query.answer("Plan not found", show_alert=True)
             return
         caption, rows, photo = screen
-        await _show_screen(query, caption, rows, photo)
+        if photo:
+            await raw_edit_message_media(query.message.chat_id, query.message.message_id, photo, caption, rows)
+        else:
+            await raw_edit_message_text(query.message.chat_id, query.message.message_id, caption, rows)
         await query.answer()
         return
 
@@ -1660,7 +1616,10 @@ async def on_callback(update, context):
             await query.answer("Plan not found", show_alert=True)
             return
         caption, rows, photo = screen
-        await _show_screen(query, caption, rows, photo)
+        if photo:
+            await raw_edit_message_media(query.message.chat_id, query.message.message_id, photo, caption, rows)
+        else:
+            await raw_edit_message_text(query.message.chat_id, query.message.message_id, caption, rows)
         await query.answer()
         return
 
@@ -2204,9 +2163,6 @@ async def on_callback(update, context):
             [InlineKeyboardButton("+ Increment", callback_data="setaction:increment")],
             [InlineKeyboardButton("- Decrement", callback_data="setaction:decrement")],
             [InlineKeyboardButton("Use Wallet", callback_data="setaction:use_wallet")],
-            [InlineKeyboardButton("Deposit", callback_data="setaction:deposit")],
-            [InlineKeyboardButton("Checkout More Products", callback_data="setaction:checkout_more")],
-            [InlineKeyboardButton("View Cart", callback_data="setaction:view_cart")],
             [InlineKeyboardButton("Back", callback_data="e_back")],
         ]
         await safe_edit(query, context, text, InlineKeyboardMarkup(kb))
@@ -3193,20 +3149,6 @@ def main():
     persistence = PicklePersistence(filepath=os.path.join(BASE_DIR, "bot_persistence.pkl"), update_interval=1)
 
     async def _post_init(application):
-        # Belt-and-suspenders fix: if anything (a hijacked/leaked token, a
-        # misconfigured service, anything) sets a webhook on this bot again in
-        # the future, polling would otherwise crash forever with "Conflict:
-        # can't use getUpdates method while webhook is active" every single
-        # restart. Clearing it here, on every startup, means one restart
-        # (which systemd already does automatically within 5s) is enough to
-        # self-heal instead of staying down indefinitely.
-        try:
-            info = await application.bot.get_webhook_info()
-            if info.url:
-                print(f"[startup] Webhook was active ({info.url}) - deleting it so polling can run.")
-                await application.bot.delete_webhook(drop_pending_updates=False)
-        except Exception as e:
-            print(f"[startup] Webhook check/delete failed: {e}")
         await payments.resume_pending_orders(application)
 
     app = Application.builder().token(BOT_TOKEN).persistence(persistence).post_init(_post_init).build()
@@ -3225,7 +3167,6 @@ def main():
     app.add_handler(CommandHandler("remove", cmd_remove))
     app.add_handler(CommandHandler("add", cmd_add))
     app.add_handler(CommandHandler("dm", cmd_dm))
-    app.add_handler(CommandHandler("cancel", payments.cmd_cancel))
     app.add_handler(CommandHandler("ban", cmd_ban))
     app.add_handler(CommandHandler("unban", cmd_unban))
     app.add_handler(CommandHandler("active", cmd_active))
@@ -3243,14 +3184,7 @@ def main():
     app.add_error_handler(on_error)
 
     print("Bot running. /getid to capture emoji IDs.")
-    # Explicitly request every update type on every single poll cycle - not just
-    # at startup. This is what actually prevents the allowed_updates restriction
-    # from ever getting "stuck" again (which is what happened twice now): if we
-    # only reset it once, some other party (e.g. a hijacked webhook) can silently
-    # narrow it again later and callback_query taps would go dead with zero
-    # errors anywhere. Passing this on every getUpdates call means it can never
-    # drift from what the bot actually needs.
-    app.run_polling(allowed_updates=[])
+    app.run_polling()
 
 if __name__ == "__main__":
     main()

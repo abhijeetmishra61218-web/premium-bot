@@ -3,10 +3,14 @@ Premium Villa - Telegram Shop Bot (main file)
 """
 
 import os
+import re
 import html
 import json
 import uuid
 import httpx
+import asyncio
+import logging
+import traceback
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, MessageEntity
 from telegram.ext import (
@@ -15,6 +19,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     MessageHandler,
     filters,
+    PicklePersistence,
 )
 
 import smm
@@ -76,6 +81,9 @@ DEFAULT_ACTION_EMOJIS = {
     "increment": None,
     "decrement": None,
     "use_wallet": None,
+    "deposit": None,
+    "checkout_more": None,
+    "view_cart": None,
 }
 
 # ========== RAW API HELPERS ==========
@@ -91,25 +99,46 @@ def _build_raw_keyboard(rows_spec):
                 "text": btn["text"],
                 "callback_data": btn["callback_data"],
             }
-            if btn.get("emoji_id"):
-                raw_btn["icon_custom_emoji_id"] = btn["emoji_id"]
+            eid = btn.get("emoji_id")
+            if eid and str(eid).isdigit():
+                raw_btn["icon_custom_emoji_id"] = eid
             raw_row.append(raw_btn)
         raw_rows.append(raw_row)
     return {"inline_keyboard": raw_rows}
 
+async def _raw_post(method, payload, retries=2):
+    """POST to the raw Telegram API with a timeout, retry on network errors,
+    and always log if Telegram itself rejects the call (ok: false) - without
+    this, edits/sends could fail completely silently with no trace anywhere."""
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                r = await client.post(f"{TG_API}/{method}", json=payload)
+            data = r.json()
+            if not data.get("ok"):
+                print(f"[raw_api] {method} rejected by Telegram: {data.get('description')} | payload keys: {list(payload.keys())}")
+            return data
+        except Exception as e:
+            last_err = e
+            if attempt < retries:
+                await asyncio.sleep(0.5 * (attempt + 1))
+                continue
+            print(f"[raw_api] {method} failed after {retries + 1} attempts: {e}")
+            return {"ok": False, "description": str(e)}
+    return {"ok": False, "description": str(last_err)}
+
 async def raw_send_message(chat_id, text, keyboard_rows, photo=None, parse_mode="HTML"):
     if photo:
         return await raw_send_photo(chat_id, photo, text, keyboard_rows, parse_mode)
-    
+
     payload = {
         "chat_id": chat_id,
         "text": text,
         "parse_mode": parse_mode,
         "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
-    async with httpx.AsyncClient() as client:
-        r = await client.post(f"{TG_API}/sendMessage", json=payload)
-    return r.json()
+    return await _raw_post("sendMessage", payload)
 
 async def raw_send_photo(chat_id, photo, caption, keyboard_rows, parse_mode="HTML"):
     payload = {
@@ -119,9 +148,7 @@ async def raw_send_photo(chat_id, photo, caption, keyboard_rows, parse_mode="HTM
         "parse_mode": parse_mode,
         "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
-    async with httpx.AsyncClient() as client:
-        r = await client.post(f"{TG_API}/sendPhoto", json=payload)
-    return r.json()
+    return await _raw_post("sendPhoto", payload)
 
 async def raw_edit_message_text(chat_id, message_id, text, keyboard_rows, parse_mode="HTML"):
     payload = {
@@ -131,9 +158,7 @@ async def raw_edit_message_text(chat_id, message_id, text, keyboard_rows, parse_
         "parse_mode": parse_mode,
         "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
-    async with httpx.AsyncClient() as client:
-        r = await client.post(f"{TG_API}/editMessageText", json=payload)
-    return r.json()
+    return await _raw_post("editMessageText", payload)
 
 async def raw_edit_message_media(chat_id, message_id, photo, caption, keyboard_rows, parse_mode="HTML"):
     payload = {
@@ -142,9 +167,28 @@ async def raw_edit_message_media(chat_id, message_id, photo, caption, keyboard_r
         "media": {"type": "photo", "media": photo, "caption": caption, "parse_mode": parse_mode},
         "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
-    async with httpx.AsyncClient() as client:
-        r = await client.post(f"{TG_API}/editMessageMedia", json=payload)
-    return r.json()
+    return await _raw_post("editMessageMedia", payload)
+
+async def _show_screen(query, caption, rows, photo):
+    """Render caption+rows(+optional photo) into the current message. Only edits in
+    place when the message's media state already matches the target (both photo, or
+    both text) - Telegram rejects editMessageText on a photo message and vice versa,
+    so any mismatch falls back to delete+resend instead of failing silently."""
+    msg = query.message
+    has_photo_now = bool(msg.photo)
+    if photo and has_photo_now:
+        await raw_edit_message_media(msg.chat_id, msg.message_id, photo, caption, rows)
+    elif not photo and not has_photo_now:
+        await raw_edit_message_text(msg.chat_id, msg.message_id, caption, rows)
+    else:
+        try:
+            await msg.delete()
+        except Exception:
+            pass
+        if photo:
+            await raw_send_photo(msg.chat_id, photo, caption, rows)
+        else:
+            await raw_send_message(msg.chat_id, caption, rows)
 
 # ========== storage helpers ==========
 def load_json(path, default):
@@ -494,10 +538,19 @@ async def safe_edit(query, context, text, reply_markup=None):
         pass
 
 # ========== /start ==========
+def _clear_user_data_keep_order(context):
+    """Like context.user_data.clear(), but doesn't destroy an order the user
+    is still mid-paying - letting a customer bypass the "you have an ongoing
+    order" guard just by navigating back to the main menu."""
+    pay_order = context.user_data.get("pay_order")
+    context.user_data.clear()
+    if pay_order and pay_order.get("state") in ("choosing", "await_payment"):
+        context.user_data["pay_order"] = pay_order
+
 async def start(update, context):
     user = update.effective_user
     store.register_user(user.id, user.username, user.first_name)
-    context.user_data.clear()
+    _clear_user_data_keep_order(context)
     caption = build_welcome_caption(user.first_name)
     menu_rows = build_menu_rows(user.id)
 
@@ -598,6 +651,9 @@ Order Management:
 /orders - Show all orders statistics
 /stats @username - Show order statistics of a specific user
 
+Direct Message:
+/dm @username message - Send a message to one user (formatting preserved exactly)
+
 Broadcast:
 /broadcast message - Send message to all users
 
@@ -607,30 +663,53 @@ Info:
 """
     await update.message.reply_text(commands_list)
 
+async def cmd_users(update, context):
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("This command is only for admins.")
+        return
+
+    users = store.load_users()
+    if not users:
+        await update.message.reply_text("No users yet.")
+        return
+
+    lines = [f"Total users: {len(users)}\n"]
+    for uid, u in users.items():
+        username = u.get("username")
+        first_name = u.get("first_name") or ""
+        uname_display = f"@{username}" if username else "(no username)"
+        lines.append(f"{uname_display} - {first_name} - ID: {uid}")
+
+    text = "\n".join(lines)
+
+    if len(text) <= 4096:
+        await update.message.reply_text(text)
+    else:
+        chunk = ""
+        for line in lines:
+            if len(chunk) + len(line) + 1 > 4000:
+                await update.message.reply_text(chunk)
+                chunk = ""
+            chunk += line + "\n"
+        if chunk:
+            await update.message.reply_text(chunk)
+
 async def cmd_wallet(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     if not context.args:
         await update.message.reply_text("Usage: /wallet @username")
         return
-    
     username = context.args[0].lstrip('@')
     user_data = store.find_user_by_username(username)
-    
     if not user_data:
         await update.message.reply_text(f"User @{username} not found.")
         return
-    
     user_id = user_data['user_id']
     balance = store.wallet_balance(user_id)
-    
     await update.message.reply_text(
-        f"WALLET INFORMATION\n\n"
-        f"User: @{username}\n"
-        f"User ID: <code>{user_id}</code>\n"
-        f"Balance: <b>${balance:.2f}</b> USD",
+        f"WALLET INFORMATION\n\nUser: @{username}\nUser ID: <code>{user_id}</code>\nBalance: <b>${balance:.2f}</b> USD",
         parse_mode="HTML"
     )
 
@@ -638,13 +717,10 @@ async def cmd_remove(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     if len(context.args) < 2:
         await update.message.reply_text("Usage: /remove @username amount")
         return
-    
     username = context.args[0].lstrip('@')
-    
     try:
         amount = float(context.args[1])
         if amount <= 0:
@@ -653,34 +729,21 @@ async def cmd_remove(update, context):
     except ValueError:
         await update.message.reply_text("Invalid amount.")
         return
-    
     user_data = store.find_user_by_username(username)
-    
     if not user_data:
         await update.message.reply_text(f"User @{username} not found.")
         return
-    
     user_id = user_data['user_id']
     current_balance = store.wallet_balance(user_id)
-    
     if current_balance < amount:
         await update.message.reply_text(
-            f"Insufficient balance!\n\n"
-            f"User: @{username}\n"
-            f"Current balance: ${current_balance:.2f}\n"
-            f"Requested deduction: ${amount:.2f}",
+            f"Insufficient balance!\n\nUser: @{username}\nCurrent balance: ${current_balance:.2f}\nRequested deduction: ${amount:.2f}",
             parse_mode="HTML"
         )
         return
-    
     new_balance = store.wallet_deduct(user_id, amount)
-    
     await update.message.reply_text(
-        f"WALLET DEDUCTION SUCCESSFUL\n\n"
-        f"User: @{username}\n"
-        f"Amount Deducted: <b>${amount:.2f}</b>\n"
-        f"Previous Balance: ${current_balance:.2f}\n"
-        f"New Balance: <b>${new_balance:.2f}</b>",
+        f"WALLET DEDUCTION SUCCESSFUL\n\nUser: @{username}\nAmount Deducted: <b>${amount:.2f}</b>\nPrevious Balance: ${current_balance:.2f}\nNew Balance: <b>${new_balance:.2f}</b>",
         parse_mode="HTML"
     )
 
@@ -688,13 +751,10 @@ async def cmd_add(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     if len(context.args) < 2:
         await update.message.reply_text("Usage: /add @username amount")
         return
-    
     username = context.args[0].lstrip('@')
-    
     try:
         amount = float(context.args[1])
         if amount <= 0:
@@ -703,48 +763,104 @@ async def cmd_add(update, context):
     except ValueError:
         await update.message.reply_text("Invalid amount.")
         return
-    
     user_data = store.find_user_by_username(username)
-    
     if not user_data:
         await update.message.reply_text(f"User @{username} not found.")
         return
-    
     user_id = user_data['user_id']
     current_balance = store.wallet_balance(user_id)
     new_balance = store.wallet_add(user_id, amount)
-    
     await update.message.reply_text(
-        f"WALLET ADDITION SUCCESSFUL\n\n"
-        f"User: @{username}\n"
-        f"Previous Balance: ${current_balance:.2f}\n"
-        f"Amount Added: <b>+${amount:.2f}</b>\n"
-        f"New Balance: <b>${new_balance:.2f}</b>",
+        f"WALLET ADDITION SUCCESSFUL\n\nUser: @{username}\nPrevious Balance: ${current_balance:.2f}\nAmount Added: <b>+${amount:.2f}</b>\nNew Balance: <b>${new_balance:.2f}</b>",
         parse_mode="HTML"
     )
+
+async def cmd_dm(update, context):
+    if not store.is_admin(update.effective_user.id):
+        await update.message.reply_text("This command is only for admins.")
+        return
+
+    msg = update.effective_message
+    raw = msg.text or msg.caption or ""
+    entities = list(msg.entities or msg.caption_entities or [])
+
+    m = re.match(r'^/dm(?:@\w+)?\s+(@[A-Za-z0-9_]+)\s?', raw)
+    if not m:
+        await msg.reply_text("Usage: /dm @username your message")
+        return
+
+    username = m.group(1).lstrip('@')
+    prefix = m.group(0)
+    content = raw[len(prefix):]
+
+    if not content and not msg.photo and not getattr(msg, "video", None):
+        await msg.reply_text("Usage: /dm @username your message")
+        return
+
+    user_data = store.find_user_by_username(username)
+    if not user_data:
+        await msg.reply_text(f"User @{username} not found.")
+        return
+    user_id = user_data['user_id']
+
+    # Shift/trim entities so bold/italic/etc. from the original message line up
+    # with the content once the "/dm @username " prefix is stripped off.
+    prefix_len = len(prefix.encode('utf-16-le')) // 2
+    new_entities = []
+    for e in entities:
+        if e.offset >= prefix_len:
+            new_entities.append(MessageEntity(
+                type=e.type, offset=e.offset - prefix_len, length=e.length,
+                url=e.url, user=e.user, language=e.language,
+                custom_emoji_id=e.custom_emoji_id,
+            ))
+        elif e.offset + e.length > prefix_len:
+            overlap = prefix_len - e.offset
+            new_len = e.length - overlap
+            if new_len > 0:
+                new_entities.append(MessageEntity(
+                    type=e.type, offset=0, length=new_len,
+                    url=e.url, user=e.user, language=e.language,
+                    custom_emoji_id=e.custom_emoji_id,
+                ))
+
+    try:
+        if msg.photo:
+            await context.bot.send_photo(
+                chat_id=user_id, photo=msg.photo[-1].file_id,
+                caption=content or None, caption_entities=new_entities or None,
+            )
+        elif getattr(msg, "video", None):
+            await context.bot.send_video(
+                chat_id=user_id, video=msg.video.file_id,
+                caption=content or None, caption_entities=new_entities or None,
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=user_id, text=content, entities=new_entities or None,
+            )
+    except Exception as e:
+        await msg.reply_text(f"Failed to send message to @{username}: {e}")
+        return
+
+    await msg.reply_text(f"Message sent to @{username} (ID: {user_id}).")
 
 async def cmd_ban(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     if not context.args:
         await update.message.reply_text("Usage: /ban @username")
         return
-    
     username = context.args[0].lstrip('@')
     user_data = store.find_user_by_username(username)
-    
     if not user_data:
         await update.message.reply_text(f"User @{username} not found.")
         return
-    
     user_id = user_data['user_id']
-    
     if store.is_banned(user_id):
         await update.message.reply_text(f"User @{username} is already banned.")
         return
-    
     store.ban(user_id)
     await update.message.reply_text(f"User @{username} has been banned.")
 
@@ -752,24 +868,18 @@ async def cmd_unban(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     if not context.args:
         await update.message.reply_text("Usage: /unban @username")
         return
-    
     username = context.args[0].lstrip('@')
     user_data = store.find_user_by_username(username)
-    
     if not user_data:
         await update.message.reply_text(f"User @{username} not found.")
         return
-    
     user_id = user_data['user_id']
-    
     if not store.is_banned(user_id):
         await update.message.reply_text(f"User @{username} is not banned.")
         return
-    
     store.unban(user_id)
     await update.message.reply_text(f"User @{username} has been unbanned.")
 
@@ -777,13 +887,10 @@ async def cmd_active(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     users = store.load_users()
     active_count = len(users)
-    
     await update.message.reply_text(
-        f"ACTIVE USERS\n\n"
-        f"Total registered users: <b>{active_count}</b>",
+        f"ACTIVE USERS\n\nTotal registered users: <b>{active_count}</b>",
         parse_mode="HTML"
     )
 
@@ -791,16 +898,9 @@ async def cmd_orders(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     stats = store.global_stats()
-    
     await update.message.reply_text(
-        f"ORDER STATISTICS\n\n"
-        f"Total Orders: <b>{stats['total_orders']}</b>\n"
-        f"Today's Orders: <b>{stats['today_orders']}</b>\n"
-        f"Total Revenue: <b>{store.fmt_money(stats['total_revenue'])}</b>\n"
-        f"Today's Revenue: <b>{store.fmt_money(stats['today_revenue'])}</b>\n"
-        f"Cancelled Orders: <b>{stats['cancelled']}</b>",
+        f"ORDER STATISTICS\n\nTotal Orders: <b>{stats['total_orders']}</b>\nToday's Orders: <b>{stats['today_orders']}</b>\nTotal Revenue: <b>{store.fmt_money(stats['total_revenue'])}</b>\nToday's Revenue: <b>{store.fmt_money(stats['today_revenue'])}</b>\nCancelled Orders: <b>{stats['cancelled']}</b>",
         parse_mode="HTML"
     )
 
@@ -808,19 +908,14 @@ async def cmd_broadcast(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     if not context.args:
         await update.message.reply_text("Usage: /broadcast Your message here")
         return
-    
     message = ' '.join(context.args)
     users = store.load_users()
-    
     sent = 0
     failed = 0
-    
     status_msg = await update.message.reply_text("Broadcasting message to all users...")
-    
     for user_id_str in users:
         try:
             await context.bot.send_message(
@@ -830,33 +925,18 @@ async def cmd_broadcast(update, context):
             sent += 1
         except Exception:
             failed += 1
-    
     await status_msg.edit_text(
-        f"Broadcast completed!\n\n"
-        f"Sent: {sent}\n"
-        f"Failed: {failed}\n"
-        f"Total users: {len(users)}"
+        f"Broadcast completed!\n\nSent: {sent}\nFailed: {failed}\nTotal users: {len(users)}"
     )
 
 async def cmd_stats(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     stats = store.global_stats()
     users = store.load_users()
-    
     await update.message.reply_text(
-        f"BOT STATISTICS\n\n"
-        f"Users:\n"
-        f"  Registered: {len(users)}\n\n"
-        f"Orders:\n"
-        f"  Total: {stats['total_orders']}\n"
-        f"  Today: {stats['today_orders']}\n"
-        f"  Cancelled: {stats['cancelled']}\n\n"
-        f"Revenue:\n"
-        f"  Total: {store.fmt_money(stats['total_revenue'])}\n"
-        f"  Today: {store.fmt_money(stats['today_revenue'])}",
+        f"BOT STATISTICS\n\nUsers:\n  Registered: {len(users)}\n\nOrders:\n  Total: {stats['total_orders']}\n  Today: {stats['today_orders']}\n  Cancelled: {stats['cancelled']}\n\nRevenue:\n  Total: {store.fmt_money(stats['total_revenue'])}\n  Today: {store.fmt_money(stats['today_revenue'])}",
         parse_mode="HTML"
     )
 
@@ -864,41 +944,38 @@ async def cmd_set_stock(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     if len(context.args) < 2:
         await update.message.reply_text(
-            "Usage:\n"
-            "For product: /setstock product PRODUCT_ID STOCK\n"
-            "For plan: /setstock plan PRODUCT_ID PLAN_ID STOCK\n\n"
-            "Stock: -1 for unlimited, 0 for out of stock, positive for limited"
+            "Usage:\nFor product: /setstock product PRODUCT_ID STOCK\nFor plan: /setstock plan PRODUCT_ID PLAN_ID STOCK\n\nStock: -1 for unlimited, 0 for out of stock, positive for limited"
         )
         return
-    
     type_arg = context.args[0].lower()
-    
     if type_arg == "product":
         if len(context.args) < 3:
             await update.message.reply_text("Usage: /setstock product PRODUCT_ID STOCK")
             return
-        
         pid = context.args[1]
         try:
             stock = int(context.args[2])
         except ValueError:
             await update.message.reply_text("Stock must be a number")
             return
-        
         if store.update_product_stock(pid, stock):
             stock_text = "Unlimited" if stock == -1 else str(stock)
+            if stock != 0:
+                waiting = store.get_stock_interest(pid, None)
+                if waiting:
+                    kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+                        f"Notify {len(waiting)} Waiting User(s)", callback_data="notifystock:" + pid)]])
+                    await update.message.reply_text(f"Stock updated for product! Stock: {stock_text}", reply_markup=kb)
+                    return
             await update.message.reply_text(f"Stock updated for product! Stock: {stock_text}")
         else:
             await update.message.reply_text("Product not found")
-    
     elif type_arg == "plan":
         if len(context.args) < 4:
             await update.message.reply_text("Usage: /setstock plan PRODUCT_ID PLAN_ID STOCK")
             return
-        
         pid = context.args[1]
         plan_id = context.args[2]
         try:
@@ -906,9 +983,15 @@ async def cmd_set_stock(update, context):
         except ValueError:
             await update.message.reply_text("Stock must be a number")
             return
-        
         if store.update_plan_stock(pid, plan_id, stock):
             stock_text = "Unlimited" if stock == -1 else str(stock)
+            if stock != 0:
+                waiting = store.get_stock_interest(pid, plan_id)
+                if waiting:
+                    kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+                        f"Notify {len(waiting)} Waiting User(s)", callback_data="notifystock:" + pid + ":" + plan_id)]])
+                    await update.message.reply_text(f"Stock updated for plan! Stock: {stock_text}", reply_markup=kb)
+                    return
             await update.message.reply_text(f"Stock updated for plan! Stock: {stock_text}")
         else:
             await update.message.reply_text("Product or plan not found")
@@ -917,52 +1000,39 @@ async def cmd_pause(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     if len(context.args) < 2:
         await update.message.reply_text(
-            "Usage:\n"
-            "For product: /pause product PRODUCT_ID\n"
-            "For plan: /pause plan PRODUCT_ID PLAN_ID"
+            "Usage:\nFor product: /pause product PRODUCT_ID\nFor plan: /pause plan PRODUCT_ID PLAN_ID"
         )
         return
-    
     type_arg = context.args[0].lower()
-    
     if type_arg == "product":
         pid = context.args[1]
         product = get_product(pid)
         if not product:
             await update.message.reply_text("Product not found")
             return
-        
         current_paused = product.get("paused", False)
         new_paused = not current_paused
-        
         if store.pause_product(pid, new_paused):
             status = "paused" if new_paused else "resumed"
             await update.message.reply_text(f"Product {status} successfully!")
-    
     elif type_arg == "plan":
         if len(context.args) < 3:
             await update.message.reply_text("Usage: /pause plan PRODUCT_ID PLAN_ID")
             return
-        
         pid = context.args[1]
         plan_id = context.args[2]
-        
         product = get_product(pid)
         if not product:
             await update.message.reply_text("Product not found")
             return
-        
         plan = find_plan(product, plan_id)
         if not plan:
             await update.message.reply_text("Plan not found")
             return
-        
         current_paused = plan.get("paused", False)
         new_paused = not current_paused
-        
         if store.pause_plan(pid, plan_id, new_paused):
             status = "paused" if new_paused else "resumed"
             await update.message.reply_text(f"Plan {status} successfully!")
@@ -971,21 +1041,17 @@ async def cmd_stock_status(update, context):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("This command is only for admins.")
         return
-    
     if len(context.args) > 0:
         pid = context.args[0]
         product = get_product(pid)
         if not product:
             await update.message.reply_text("Product not found")
             return
-        
         status_text = f"STOCK STATUS: {product['name']}\n\n"
-        
         prod_paused = "PAUSED" if product.get("paused", False) else "ACTIVE"
         prod_stock = product.get("stock", -1)
         prod_stock_text = "Unlimited" if prod_stock == -1 else str(prod_stock)
         status_text += f"Product: {prod_paused} | Stock: {prod_stock_text}\n\n"
-        
         if product.get("plans"):
             status_text += "Plans:\n"
             for plan in product["plans"]:
@@ -993,32 +1059,25 @@ async def cmd_stock_status(update, context):
                 plan_stock = plan.get("stock", -1)
                 plan_stock_text = "U" if plan_stock == -1 else str(plan_stock)
                 status_text += f"  {plan_paused} {plan['name']}: Stock {plan_stock_text}\n"
-        
         await update.message.reply_text(status_text)
     else:
         products = load_products()["items"]
         status_text = "ALL PRODUCTS STOCK STATUS\n\n"
-        
         for pid, product in products.items():
             prod_paused = "P" if product.get("paused", False) else "A"
             status_text += f"{prod_paused} {product['name']}\n"
-            
             for plan in product.get("plans", []):
                 plan_paused = "P" if plan.get("paused", False) else "A"
                 plan_stock = plan.get("stock", -1)
                 plan_stock_text = "U" if plan_stock == -1 else str(plan_stock)
                 status_text += f"   {plan_paused} {plan['name']}: {plan_stock_text}\n"
             status_text += "\n"
-        
         await update.message.reply_text(status_text)
 
 # ========== customer screens ==========
 def category_screen(cat_id, user_id):
     name = button_name(cat_id)
-    if cat_id not in PRODUCT_CATEGORIES:
-        text = "<b>" + html.escape(name) + "</b>" + NL + NL + "This section is coming soon."
-        rows = [[{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}]]
-        return text, rows, None
+    # All categories are valid — no restriction
     prods = products_in_category(cat_id)
     rows = []
     i = 0
@@ -1028,63 +1087,61 @@ def category_screen(cat_id, user_id):
             row.append({"text": prods[i + 1][1]["name"], "callback_data": "prod:" + prods[i + 1][0], "emoji_id": prods[i + 1][1].get("emoji_id")})
         rows.append(row)
         i += 2
-    
     if user_id == ADMIN_ID:
         rows.append([{"text": "Add Product", "callback_data": "addprod:" + cat_id, "emoji_id": None}])
         if prods:
             rows.append([{"text": "Manage Products", "callback_data": "mprod:" + cat_id, "emoji_id": None}])
         rows.append([{"text": "Edit Page Text", "callback_data": "catintro:" + cat_id, "emoji_id": None}])
         rows.append([{"text": "Set Page Image", "callback_data": "catimage:" + cat_id, "emoji_id": None}])
-    
     rows.append([{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}])
-    
     cat_image = get_category_image(cat_id)
-    
     if prods:
         text = "<b>" + html.escape(name) + "</b>" + NL + html.escape(get_category_intro(cat_id))
     elif user_id == ADMIN_ID:
         text = "<b>" + html.escape(name) + "</b>" + NL + "No products yet. Tap 'Add Product' to create one."
     else:
         text = "<b>" + html.escape(name) + "</b>" + NL + "No products available yet. Please check back soon."
-    
+
     return text, rows, cat_image
 
 def product_screen(pid, user_id=None):
     product = get_product(pid)
     if not product:
         return None
-    
     available, reason = store.check_product_availability(product)
-    
     if not available:
         caption = "<b>" + html.escape(product["name"]) + "</b>" + NL + NL
         if reason == "paused":
             caption += "<b>Sorry, this product is currently paused.</b>" + NL
+            caption += "Please check back later."
+            rows = [[{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}]]
         else:
-            caption += "<b>Sorry, this product is currently out of stock.</b>" + NL
-        caption += "Please check back later."
-        
-        rows = [[{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}]]
+            caption += "<b>This product is not in stock.</b>" + NL
+            caption += "We will notify you instantly when it comes back in stock."
+            rows = [
+                [{"text": "Notify Me When Available", "callback_data": "oos:" + pid, "emoji_id": None}],
+                [{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}],
+            ]
         return caption, rows, None
-    
     caption = "<b>" + html.escape(product["name"]) + "</b>"
     desc = html.escape(product.get("description", ""))
     if desc:
         caption += NL + NL + desc
-    
     rows = []
     for plan in product.get("plans", []):
         plan_available, plan_reason = store.check_plan_availability(product, plan)
-        
         if plan_available:
             rows.append([{"text": plan["name"] + " | " + plan["price"], "callback_data": "plan:" + pid + ":" + plan["id"], "emoji_id": plan.get("emoji_id")}])
         else:
             status_text = "PAUSED" if plan_reason == "plan_paused" else "OUT"
-            rows.append([{"text": plan["name"] + " | " + plan["price"] + " [" + status_text + "]", "callback_data": "noop", "emoji_id": plan.get("emoji_id")}])
-    
+            oos_cb = "noop" if plan_reason == "plan_paused" else "oos:" + pid + ":" + plan["id"]
+            rows.append([{"text": plan["name"] + " | " + plan["price"] + " [" + status_text + "]", "callback_data": oos_cb, "emoji_id": plan.get("emoji_id")}])
     if user_id == ADMIN_ID:
-        rows.append([{"text": "Edit Product", "callback_data": "pm:" + pid, "emoji_id": None}])
-    
+        img_status = "Change Image" if product.get("image") else "Add Image"
+        rows.append([
+            {"text": "Edit Product", "callback_data": "pm:" + pid, "emoji_id": None},
+            {"text": img_status, "callback_data": "pei:" + pid, "emoji_id": None},
+        ])
     rows.append([{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}])
     return caption, rows, product.get("image")
 
@@ -1095,43 +1152,41 @@ def plan_screen(pid, plan_id, qty=1):
     plan = find_plan(product, plan_id)
     if not plan:
         return None
-    
     available, reason = store.check_plan_availability(product, plan)
-    
     if not available:
         caption = "<b>" + html.escape(product["name"]) + "</b>" + NL + NL
         if reason == "product_paused":
             caption += "<b>Sorry, this product is currently paused.</b>" + NL
+            caption += "Please check back later."
+            rows = [[{"text": "Back", "callback_data": "prod:" + pid, "emoji_id": get_action_emoji("back_button")}]]
         elif reason == "plan_paused":
             caption += "<b>Sorry, this plan is currently paused.</b>" + NL
+            caption += "Please check back later."
+            rows = [[{"text": "Back", "callback_data": "prod:" + pid, "emoji_id": get_action_emoji("back_button")}]]
         else:
-            caption += "<b>Sorry, this product is currently out of stock.</b>" + NL
-        caption += "Please check back later."
-        
-        rows = [[{"text": "Back", "callback_data": "prod:" + pid, "emoji_id": get_action_emoji("back_button")}]]
+            caption += "<b>This plan is not in stock.</b>" + NL
+            caption += "We will notify you instantly when it comes back in stock."
+            rows = [
+                [{"text": "Notify Me When Available", "callback_data": "oos:" + pid + ":" + plan_id, "emoji_id": None}],
+                [{"text": "Back", "callback_data": "prod:" + pid, "emoji_id": get_action_emoji("back_button")}],
+            ]
         return caption, rows, None
-    
     if qty < 1:
         qty = 1
-    
     available_stock = store.get_available_stock(product, plan)
     stock_text = ""
     if available_stock > 0:
         stock_text = f"\nStock available: {available_stock}"
         if qty > available_stock:
             qty = available_stock
-    
     caption = (
         "<b>" + html.escape(product["name"]) + "</b>" + NL + NL
         + "<b>Plan: " + html.escape(plan["name"]) + "</b>" + NL
         + "<b>Price: " + html.escape(plan["price"]) + "</b>"
         + stock_text
     )
-    
     base = pid + ":" + plan_id + ":" + str(qty)
-    
     action_emojis = load_action_emojis()
-    
     if available_stock != 1 and available_stock != 0:
         rows = [
             [
@@ -1149,7 +1204,6 @@ def plan_screen(pid, plan_id, qty=1):
             [{"text": "Add to Cart", "callback_data": "cart:addpq:" + base, "emoji_id": action_emojis.get("add_to_cart")}],
             [{"text": "Back", "callback_data": "prod:" + pid, "emoji_id": action_emojis.get("back_button")}],
         ]
-    
     return caption, rows, plan.get("image")
 
 def tg_select_screen(user_id):
@@ -1284,7 +1338,6 @@ def manage_products_panel(cat_id):
             stock_status = " [OUT]"
         elif p.get("stock", -1) > 0:
             stock_status = f" [{p['stock']}]"
-        
         kb.append([
             InlineKeyboardButton(p["name"] + stock_status, callback_data="pm:" + pid),
             InlineKeyboardButton("Up", callback_data="pmu:" + pid),
@@ -1294,18 +1347,75 @@ def manage_products_panel(cat_id):
     kb.append([InlineKeyboardButton("Back", callback_data="cat:" + cat_id)])
     return "MANAGE PRODUCTS - " + name + NL + "Tap a product to edit.", InlineKeyboardMarkup(kb)
 
+async def _apply_product_stock(context, chat_id, pid, stock):
+    ok = store.update_product_stock(pid, stock)
+    if ok and stock != 0:
+        waiting = store.get_stock_interest(pid, None)
+        if waiting:
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+                f"Notify {len(waiting)} Waiting User(s)", callback_data="notifystock:" + pid)]])
+            try:
+                await context.bot.send_message(chat_id, "Some users are waiting for this product to be back in stock.", reply_markup=kb)
+            except Exception:
+                pass
+    return ok
+
+async def _apply_plan_stock(context, chat_id, pid, plan_id, stock):
+    ok = store.update_plan_stock(pid, plan_id, stock)
+    if ok and stock != 0:
+        waiting = store.get_stock_interest(pid, plan_id)
+        if waiting:
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+                f"Notify {len(waiting)} Waiting User(s)", callback_data="notifystock:" + pid + ":" + plan_id)]])
+            try:
+                await context.bot.send_message(chat_id, "Some users are waiting for this plan to be back in stock.", reply_markup=kb)
+            except Exception:
+                pass
+    return ok
+
+def prod_stock_panel(pid):
+    product = get_product(pid)
+    if not product:
+        return None
+    stock = product.get("stock", -1)
+    stock_text = "Unlimited" if stock == -1 else ("Out of Stock" if stock == 0 else str(stock))
+    text = "SET PRODUCT STOCK" + NL + NL + "Current: " + stock_text
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Unlimited", callback_data="prod_stock_set:" + pid + ":u")],
+        [InlineKeyboardButton("Out of Stock", callback_data="prod_stock_set:" + pid + ":o")],
+        [InlineKeyboardButton("Custom Amount", callback_data="prod_stock_custom:" + pid)],
+        [InlineKeyboardButton("Back", callback_data="pm:" + pid)],
+    ])
+    return text, kb
+
+def plan_stock_panel(pid, plan_id):
+    product = get_product(pid)
+    if not product:
+        return None
+    plan = find_plan(product, plan_id)
+    if not plan:
+        return None
+    stock = plan.get("stock", -1)
+    stock_text = "Unlimited" if stock == -1 else ("Out of Stock" if stock == 0 else str(stock))
+    text = "SET PLAN STOCK - " + plan["name"] + NL + NL + "Current: " + stock_text
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Unlimited", callback_data="plan_stock_set:" + pid + ":" + plan_id + ":u")],
+        [InlineKeyboardButton("Out of Stock", callback_data="plan_stock_set:" + pid + ":" + plan_id + ":o")],
+        [InlineKeyboardButton("Custom Amount", callback_data="plan_stock_custom:" + pid + ":" + plan_id)],
+        [InlineKeyboardButton("Back", callback_data="plm:" + pid + ":" + plan_id)],
+    ])
+    return text, kb
+
 def product_manage_menu(pid):
     product = get_product(pid)
     if not product:
         return None
     cat = product["category"]
     img = "Yes" if product.get("image") else "No"
-    
     stock = product.get("stock", -1)
     paused = product.get("paused", False)
     stock_text = "Unlimited" if stock == -1 else str(stock)
     status_text = "PAUSED" if paused else "ACTIVE"
-    
     text = (
         "EDITING: " + product["name"] + NL + NL
         + "Description: " + (product.get("description") or "(none)") + NL
@@ -1315,7 +1425,6 @@ def product_manage_menu(pid):
         + "Plans: " + str(len(product.get("plans", []))) + NL + NL
         + "Note: Individual plans can have their own stock settings"
     )
-    
     kb = [
         [InlineKeyboardButton("Edit Name", callback_data="pen:" + pid)],
         [InlineKeyboardButton("Edit Description", callback_data="ped:" + pid)],
@@ -1341,7 +1450,6 @@ def manage_plans_panel(pid):
             stock_status = " [OUT]"
         elif pl.get("stock", -1) > 0:
             stock_status = f" [{pl['stock']}]"
-        
         kb.append([
             InlineKeyboardButton(pl["name"] + " | " + pl["price"] + stock_status, callback_data="plm:" + pid + ":" + pl["id"]),
             InlineKeyboardButton("Up", callback_data="plu:" + pid + ":" + pl["id"]),
@@ -1359,15 +1467,12 @@ def plan_manage_menu(pid, plan_id):
     if not plan:
         return None
     img = "Yes" if plan.get("image") else "No"
-    
     stock = plan.get("stock", -1)
     paused = plan.get("paused", False)
     stock_text = "Unlimited" if stock == -1 else str(stock)
     status_text = "PAUSED" if paused else "ACTIVE"
-    
     product_stock = product.get("stock", -1)
     product_stock_text = "Unlimited" if product_stock == -1 else str(product_stock)
-    
     text = (
         "EDITING PLAN" + NL + NL
         + "Plan: " + plan["name"] + NL
@@ -1378,7 +1483,6 @@ def plan_manage_menu(pid, plan_id):
         + f"Product Stock: {product_stock_text}" + NL
         + "Note: Plan stock overrides product stock"
     )
-    
     kb = [
         [InlineKeyboardButton("Edit Name", callback_data="plen:" + pid + ":" + plan_id)],
         [InlineKeyboardButton("Edit Price", callback_data="plep:" + pid + ":" + plan_id)],
@@ -1397,7 +1501,7 @@ async def on_callback(update, context):
     data = query.data
 
     if data == "home":
-        context.user_data.clear()
+        _clear_user_data_keep_order(context)
         msg = query.message
         try:
             await msg.delete()
@@ -1409,14 +1513,12 @@ async def on_callback(update, context):
 
     if data.startswith("open:"):
         cat_id = data[5:]
-        
         if cat_id == "support":
             sup = load_support()
             first_name = query.from_user.first_name or "there"
             raw_text = sup.get("text") or DEFAULT_SUPPORT["text"]
             text = "<b>" + html.escape(raw_text.replace("{name}", first_name)) + "</b>"
             photo = sup.get("image")
-            
             if user_id == ADMIN_ID:
                 rows = [
                     [{"text": "Edit Text", "callback_data": "sup_text", "emoji_id": None}],
@@ -1425,14 +1527,12 @@ async def on_callback(update, context):
                 ]
             else:
                 rows = [[{"text": "Close", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}]]
-            
             await query.answer()
             if photo:
                 await raw_send_photo(query.message.chat_id, photo, text, rows)
             else:
                 await raw_send_message(query.message.chat_id, text, rows)
             return
-        
         if cat_id == "tg":
             text, rows, photo = tg_select_screen(user_id)
             if photo:
@@ -1451,21 +1551,18 @@ async def on_callback(update, context):
             await raw_send_message(query.message.chat_id, text, rows)
         await query.answer()
         return
-    
+
     if data == "tgmenu":
-        context.user_data.clear()
+        _clear_user_data_keep_order(context)
         text, rows, photo = tg_select_screen(user_id)
-        
         try:
             await query.message.delete()
         except Exception:
             pass
-        
         if photo:
             await raw_send_photo(query.message.chat_id, photo, text, rows)
         else:
             await raw_send_message(query.message.chat_id, text, rows)
-        
         await query.answer()
         return
 
@@ -1475,19 +1572,15 @@ async def on_callback(update, context):
         if not plan:
             await query.answer("Plan not found", show_alert=True)
             return
-        
         try:
             await query.message.delete()
         except Exception:
             pass
-        
         text, rows, photo = tg_username_screen()
-        
         if photo:
             await raw_send_photo(query.message.chat_id, photo, text, rows)
         else:
             await raw_send_message(query.message.chat_id, text, rows)
-        
         context.user_data.clear()
         context.user_data["state"] = "tg_await_username"
         context.user_data["tg_plan"] = plan_id
@@ -1509,10 +1602,7 @@ async def on_callback(update, context):
             await query.answer()
             return
         text, rows, photo = category_screen(cat_id, user_id)
-        if photo:
-            await raw_edit_message_media(query.message.chat_id, query.message.message_id, photo, text, rows)
-        else:
-            await raw_edit_message_text(query.message.chat_id, query.message.message_id, text, rows)
+        await _show_screen(query, text, rows, photo)
         await query.answer()
         return
 
@@ -1536,10 +1626,7 @@ async def on_callback(update, context):
             await query.answer("Product not found", show_alert=True)
             return
         caption, rows, photo = screen
-        if photo:
-            await raw_edit_message_media(query.message.chat_id, query.message.message_id, photo, caption, rows)
-        else:
-            await raw_edit_message_text(query.message.chat_id, query.message.message_id, caption, rows)
+        await _show_screen(query, caption, rows, photo)
         await query.answer()
         return
 
@@ -1550,10 +1637,7 @@ async def on_callback(update, context):
             await query.answer("Plan not found", show_alert=True)
             return
         caption, rows, photo = screen
-        if photo:
-            await raw_edit_message_media(query.message.chat_id, query.message.message_id, photo, caption, rows)
-        else:
-            await raw_edit_message_text(query.message.chat_id, query.message.message_id, caption, rows)
+        await _show_screen(query, caption, rows, photo)
         await query.answer()
         return
 
@@ -1571,10 +1655,7 @@ async def on_callback(update, context):
             await query.answer("Plan not found", show_alert=True)
             return
         caption, rows, photo = screen
-        if photo:
-            await raw_edit_message_media(query.message.chat_id, query.message.message_id, photo, caption, rows)
-        else:
-            await raw_edit_message_text(query.message.chat_id, query.message.message_id, caption, rows)
+        await _show_screen(query, caption, rows, photo)
         await query.answer()
         return
 
@@ -1611,8 +1692,50 @@ async def on_callback(update, context):
         await query.answer()
         return
 
+    if data.startswith("oos:"):
+        rest = data[4:]
+        parts = rest.split(":", 1)
+        pid = parts[0]
+        plan_id = parts[1] if len(parts) > 1 else None
+        store.add_stock_interest(pid, plan_id, user_id)
+        await query.answer(
+            "This product is not in stock. We will notify you instantly when it comes back in stock.",
+            show_alert=True,
+        )
+        return
+
     if user_id != ADMIN_ID:
         await query.answer("Not allowed", show_alert=True)
+        return
+
+    if data.startswith("notifystock:"):
+        rest = data[len("notifystock:"):]
+        parts = rest.split(":", 1)
+        pid = parts[0]
+        plan_id = parts[1] if len(parts) > 1 else None
+        waiting = store.get_stock_interest(pid, plan_id)
+        product = get_product(pid)
+        name = product["name"] if product else pid
+        plan = find_plan(product, plan_id) if (product and plan_id) else None
+        label = name + (" - " + plan["name"] if plan else "")
+        sent = 0
+        for uid in waiting:
+            try:
+                await context.bot.send_message(
+                    uid,
+                    "<b>Good news!</b> \"" + html.escape(label) + "\" is back in stock." + NL
+                    + "Open the shop to grab it.",
+                    parse_mode="HTML",
+                )
+                sent += 1
+            except Exception:
+                pass
+        store.clear_stock_interest(pid, plan_id)
+        await query.answer(f"Notified {sent} of {len(waiting)} user(s).", show_alert=True)
+        try:
+            await query.message.edit_text(f"Notified {sent} of {len(waiting)} waiting user(s) about restock of \"{label}\".")
+        except Exception:
+            pass
         return
 
     if data == "tgmanage":
@@ -1897,22 +2020,65 @@ async def on_callback(update, context):
         await safe_edit(query, context, "Send the NEW PLAN NAME:")
         return
 
-    if data.startswith("prod_stock:"):
-        pid = data[11:]
+    if data.startswith("prod_stock_set:"):
+        parts = data[len("prod_stock_set:"):].split(":", 1)
+        pid, mode = parts[0], parts[1]
+        stock = -1 if mode == "u" else 0
+        await _apply_product_stock(context, query.message.chat_id, pid, stock)
+        await query.answer("Stock updated" if mode == "u" else "Marked out of stock")
+        res = product_manage_menu(pid)
+        if res:
+            text, kb = res
+            await safe_edit(query, context, text, reply_markup=kb)
+        return
+
+    if data.startswith("prod_stock_custom:"):
+        pid = data[len("prod_stock_custom:"):]
         context.user_data.clear()
         context.user_data["state"] = "set_product_stock"
         context.user_data["target_pid"] = pid
-        product = get_product(pid)
-        current_stock = product.get("stock", -1) if product else -1
-        await safe_edit(query, context,
-            f"SET PRODUCT STOCK\n\n"
-            f"Current stock: {current_stock}\n\n"
-            f"Send a number:\n"
-            f"-1 = Unlimited stock\n"
-            f"0 = Out of stock\n"
-            f"1-999999 = Limited stock"
-        )
+        await safe_edit(query, context, "SET PRODUCT STOCK" + NL + NL + "Send the stock quantity (a positive whole number):")
         return
+
+    if data.startswith("prod_stock:"):
+        pid = data[len("prod_stock:"):]
+        res = prod_stock_panel(pid)
+        if res:
+            text, kb = res
+            await safe_edit(query, context, text, reply_markup=kb)
+        return
+
+    if data.startswith("plan_stock_set:"):
+        parts = data[len("plan_stock_set:"):].split(":", 2)
+        pid, plan_id, mode = parts[0], parts[1], parts[2]
+        stock = -1 if mode == "u" else 0
+        await _apply_plan_stock(context, query.message.chat_id, pid, plan_id, stock)
+        await query.answer("Stock updated" if mode == "u" else "Marked out of stock")
+        res = plan_manage_menu(pid, plan_id)
+        if res:
+            text, kb = res
+            await safe_edit(query, context, text, reply_markup=kb)
+        return
+
+    if data.startswith("plan_stock_custom:"):
+        parts = data[len("plan_stock_custom:"):].split(":", 1)
+        pid, plan_id = parts[0], parts[1]
+        context.user_data.clear()
+        context.user_data["state"] = "set_plan_stock"
+        context.user_data["target_pid"] = pid
+        context.user_data["target_plan"] = plan_id
+        await safe_edit(query, context, "SET PLAN STOCK" + NL + NL + "Send the stock quantity (a positive whole number):")
+        return
+
+    if data.startswith("plan_stock:"):
+        parts = data[len("plan_stock:"):].split(":", 1)
+        pid, plan_id = parts[0], parts[1]
+        res = plan_stock_panel(pid, plan_id)
+        if res:
+            text, kb = res
+            await safe_edit(query, context, text, reply_markup=kb)
+        return
+
 
     if data.startswith("prod_pause:"):
         pid = data[11:]
@@ -1929,26 +2095,6 @@ async def on_callback(update, context):
             await safe_edit(query, context, text, reply_markup=kb)
         return
 
-    if data.startswith("plan_stock:"):
-        parts = data[11:].split(":", 1)
-        pid = parts[0]
-        plan_id = parts[1]
-        context.user_data.clear()
-        context.user_data["state"] = "set_plan_stock"
-        context.user_data["target_pid"] = pid
-        context.user_data["target_plan"] = plan_id
-        product = get_product(pid)
-        plan = find_plan(product, plan_id) if product else None
-        current_stock = plan.get("stock", -1) if plan else -1
-        await safe_edit(query, context,
-            f"SET PLAN STOCK\n\n"
-            f"Current stock: {current_stock}\n\n"
-            f"Send a number:\n"
-            f"-1 = Unlimited stock\n"
-            f"0 = Out of stock\n"
-            f"1-999999 = Limited stock"
-        )
-        return
 
     if data.startswith("plan_pause:"):
         parts = data[11:].split(":", 1)
@@ -1968,11 +2114,13 @@ async def on_callback(update, context):
             await safe_edit(query, context, text, reply_markup=kb)
         return
 
-if data == "edit":
-    await query.answer()  # Move this to the TOP
-    context.user_data.clear()
-    text, kb = edit_panel()
-    await query.message.reply_text(text, reply_markup=kb)
+    if data == "edit":
+        context.user_data.clear()
+        text, kb = edit_panel()
+        await query.message.reply_text(text, reply_markup=kb)
+        await query.answer()
+        return
+
     if data == "e_back":
         context.user_data.clear()
         text, kb = edit_panel()
@@ -2051,6 +2199,9 @@ if data == "edit":
             [InlineKeyboardButton("+ Increment", callback_data="setaction:increment")],
             [InlineKeyboardButton("- Decrement", callback_data="setaction:decrement")],
             [InlineKeyboardButton("Use Wallet", callback_data="setaction:use_wallet")],
+            [InlineKeyboardButton("Deposit", callback_data="setaction:deposit")],
+            [InlineKeyboardButton("Checkout More Products", callback_data="setaction:checkout_more")],
+            [InlineKeyboardButton("View Cart", callback_data="setaction:view_cart")],
             [InlineKeyboardButton("Back", callback_data="e_back")],
         ]
         await safe_edit(query, context, text, InlineKeyboardMarkup(kb))
@@ -2060,18 +2211,25 @@ if data == "edit":
         action_key = data[10:]
         context.user_data["state"] = "set_action_emoji"
         context.user_data["action_key"] = action_key
-        await safe_edit(query, context, 
+        await safe_edit(query, context,
             f"SET EMOJI FOR: {action_key.replace('_', ' ').upper()}\n\n"
             "Send a message with a custom animated emoji IN IT.\n"
             "Send 0 to REMOVE the current emoji.")
         return
 
+    # ========== SET PRODUCT EMOJI (includes SMM services) ==========
     if data == "e_setprodemoji":
         all_products = load_products()["items"]
         kb = []
+        # OTT / VPN products
         for pid, p in all_products.items():
             emoji_info = " [E]" if p.get("emoji_id") else ""
             kb.append([InlineKeyboardButton(p["name"] + emoji_info, callback_data="seprod:" + pid)])
+        # SMM platforms (Instagram, TikTok etc.) — one button per platform
+        smm_platforms = smm.load_platforms_for_emoji()
+        for plat_id, plat_name, has_emoji in smm_platforms:
+            emoji_info = " [E]" if has_emoji else ""
+            kb.append([InlineKeyboardButton(plat_name + emoji_info + " [SMM]", callback_data="seprod_smm_plat:" + plat_id)])
         kb.append([InlineKeyboardButton("Back", callback_data="e_back")])
         await safe_edit(query, context, "Pick a product to set custom emoji:", InlineKeyboardMarkup(kb))
         return
@@ -2089,6 +2247,59 @@ if data == "edit":
         await safe_edit(query, context,
             "SET CUSTOM EMOJI for product: " + product["name"] + NL + NL
             + "Current: " + cur_emoji + NL + NL
+            + "Send a message with a custom animated emoji IN IT." + NL
+            + "Send 0 to REMOVE the current emoji."
+        )
+        return
+
+    # ========== SET EMOJI FOR SMM PLATFORM — show sub-menu ==========
+    if data.startswith("seprod_smm_plat:"):
+        plat_id = data[16:]
+        plat_name, cur_emoji = smm.get_platform_emoji_info(plat_id)
+        emoji_info = " [E]" if cur_emoji else ""
+        # Build sub-menu: platform button emoji + per-service emojis
+        kb = [[InlineKeyboardButton(plat_name + " Button Emoji" + emoji_info, callback_data="seprod_smm_btn:" + plat_id)]]
+        # Add each service of this platform
+        svcs = smm.load_services_for_emoji(plat_id)
+        for sid, label, has_emoji in svcs:
+            svc_emoji_info = " [E]" if has_emoji else ""
+            kb.append([InlineKeyboardButton(label + svc_emoji_info, callback_data="seprod_smm_svc:" + plat_id + ":" + sid)])
+        kb.append([InlineKeyboardButton("Back", callback_data="e_setprodemoji")])
+        await safe_edit(query, context,
+            "SET EMOJI — " + plat_name + NL + NL
+            + "1. Tap '" + plat_name + " Button Emoji' to set emoji on the platform button." + NL
+            + "2. Tap a service to set emoji on that service button.",
+            InlineKeyboardMarkup(kb)
+        )
+        return
+
+    if data.startswith("seprod_smm_btn:"):
+        plat_id = data[15:]
+        plat_name, cur_emoji = smm.get_platform_emoji_info(plat_id)
+        cur_text = "ID: " + str(cur_emoji) if cur_emoji else "None"
+        context.user_data.clear()
+        context.user_data["state"] = "set_smm_platform_emoji"
+        context.user_data["target_smm_plat"] = plat_id
+        await safe_edit(query, context,
+            "SET EMOJI for button: " + plat_name + NL + NL
+            + "Current: " + cur_text + NL + NL
+            + "Send a message with a custom animated emoji IN IT." + NL
+            + "Send 0 to REMOVE the current emoji."
+        )
+        return
+
+    if data.startswith("seprod_smm_svc:"):
+        rest = data[15:]
+        plat_id, sid = rest.split(":", 1)
+        label, cur_emoji = smm.get_service_emoji_info(sid)
+        cur_text = "ID: " + str(cur_emoji) if cur_emoji else "None"
+        context.user_data.clear()
+        context.user_data["state"] = "set_smm_service_emoji"
+        context.user_data["target_smm_sid"] = sid
+        context.user_data["target_smm_plat"] = plat_id
+        await safe_edit(query, context,
+            "SET EMOJI for service: " + label + NL + NL
+            + "Current: " + cur_text + NL + NL
             + "Send a message with a custom animated emoji IN IT." + NL
             + "Send 0 to REMOVE the current emoji."
         )
@@ -2147,7 +2358,7 @@ if data == "edit":
             "Send a message with a custom animated emoji IN IT.\n"
             "Send 0 to REMOVE the current emoji.")
         return
-    
+
     if data.startswith("se:"):
         bid = data[3:]
         b = find_button(load_buttons(), bid)
@@ -2234,16 +2445,12 @@ async def handle_tg_username(update, context):
     if not username or " " in username:
         await update.message.reply_text("Please type a single valid username (no spaces).")
         return
-    
     plan_id = context.user_data.get("tg_plan")
     plan = find_tg_plan(plan_id)
-    
     if not plan:
         await update.message.reply_text("Something went wrong. Please send /start and try again.")
         return
-    
     context.user_data.clear()
-    
     context.user_data["cart_pending"] = {
         "kind": "tg",
         "title": "Telegram Premium - " + plan["name"],
@@ -2253,12 +2460,9 @@ async def handle_tg_username(update, context):
         "username": username,
         "target_label": "Telegram Premium Username",
     }
-    
     caption, rows, photo = tg_confirm_screen(plan, username)
-    
     chat_id = update.effective_chat.id
     await raw_send_message(chat_id, caption, rows, photo)
-    
     try:
         await update.message.delete()
     except Exception:
@@ -2274,10 +2478,10 @@ async def on_text(update, context):
 
     if update.effective_user.id != ADMIN_ID:
         return
-    
+
     if not state:
         return
-    
+
     text = update.message.text.strip()
 
     if state == "set_action_emoji":
@@ -2299,9 +2503,7 @@ async def on_text(update, context):
                 emojis[action_key] = emoji_id
                 save_action_emojis(emojis)
                 context.user_data.clear()
-                await update.message.reply_text(
-                    f"Custom emoji set for {action_key}! ID: {emoji_id}"
-                )
+                await update.message.reply_text(f"Custom emoji set for {action_key}! ID: {emoji_id}")
             else:
                 await update.message.reply_text(
                     "No custom emoji detected." + NL + NL
@@ -2327,9 +2529,7 @@ async def on_text(update, context):
                 emojis["use_wallet"] = emoji_id
                 save_action_emojis(emojis)
                 context.user_data.clear()
-                await update.message.reply_text(
-                    f"Custom emoji set for Use Wallet button! ID: {emoji_id}"
-                )
+                await update.message.reply_text(f"Custom emoji set for Use Wallet button! ID: {emoji_id}")
             else:
                 await update.message.reply_text(
                     "No custom emoji detected." + NL + NL
@@ -2397,6 +2597,63 @@ async def on_text(update, context):
                 await update.message.reply_text(
                     "Custom emoji set for product! ID: " + emoji_id + NL + NL
                     + "Send /start to see your updated menu."
+                )
+            else:
+                await update.message.reply_text(
+                    "No custom emoji detected." + NL + NL
+                    + "Send a message containing an animated custom emoji, or send 0 to cancel."
+                )
+        return
+
+    # ========== SET EMOJI FOR SMM PLATFORM (Instagram, TikTok etc.) ==========
+    if state == "set_smm_platform_emoji":
+        if text == "0":
+            plat_id = context.user_data.get("target_smm_plat")
+            smm.set_platform_emoji(plat_id, None)
+            context.user_data.clear()
+            panel_text, kb = edit_panel()
+            await update.message.reply_text("Custom emoji removed from SMM platform.", reply_markup=kb)
+        else:
+            entities = update.message.entities or []
+            custom_emojis = [e for e in entities if e.type == MessageEntity.CUSTOM_EMOJI]
+            if custom_emojis:
+                emoji_id = custom_emojis[0].custom_emoji_id
+                plat_id = context.user_data.get("target_smm_plat")
+                smm.set_platform_emoji(plat_id, emoji_id)
+                context.user_data.clear()
+                await update.message.reply_text(
+                    "Custom emoji set! ID: " + emoji_id + NL + NL
+                    + "Send /start to see your updated menu."
+                )
+            else:
+                await update.message.reply_text(
+                    "No custom emoji detected." + NL + NL
+                    + "Send a message containing an animated custom emoji, or send 0 to cancel."
+                )
+        return
+
+    # ========== SET EMOJI FOR SMM SERVICE ==========
+    if state == "set_smm_service_emoji":
+        sid = context.user_data.get("target_smm_sid")
+        plat_id = context.user_data.get("target_smm_plat")
+        if text == "0":
+            smm.set_service_emoji(sid, None)
+            context.user_data.clear()
+            back_cb = "seprod_smm_plat:" + plat_id if plat_id else "e_setprodemoji"
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data=back_cb)]])
+            await update.message.reply_text("Custom emoji removed from service.", reply_markup=kb)
+        else:
+            entities = update.message.entities or []
+            custom_emojis = [e for e in entities if e.type == MessageEntity.CUSTOM_EMOJI]
+            if custom_emojis:
+                emoji_id = custom_emojis[0].custom_emoji_id
+                smm.set_service_emoji(sid, emoji_id)
+                context.user_data.clear()
+                back_cb = "seprod_smm_plat:" + plat_id if plat_id else "e_setprodemoji"
+                kb = InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data=back_cb)]])
+                await update.message.reply_text(
+                    "Emoji set! ID: " + emoji_id + NL + "Send /start to see your updated menu.",
+                    reply_markup=kb
                 )
             else:
                 await update.message.reply_text(
@@ -2714,7 +2971,7 @@ async def on_text(update, context):
         try:
             stock = int(text.strip())
             pid = context.user_data.get("target_pid")
-            if store.update_product_stock(pid, stock):
+            if await _apply_product_stock(context, update.effective_chat.id, pid, stock):
                 stock_text = "Unlimited" if stock == -1 else str(stock)
                 await update.message.reply_text(f"Stock updated! Stock: {stock_text}")
             else:
@@ -2734,7 +2991,7 @@ async def on_text(update, context):
             stock = int(text.strip())
             pid = context.user_data.get("target_pid")
             plan_id = context.user_data.get("target_plan")
-            if store.update_plan_stock(pid, plan_id, stock):
+            if await _apply_plan_stock(context, update.effective_chat.id, pid, plan_id, stock):
                 stock_text = "Unlimited" if stock == -1 else str(stock)
                 await update.message.reply_text(f"Plan stock updated! Stock: {stock_text}")
             else:
@@ -2753,6 +3010,11 @@ async def on_text(update, context):
 async def on_photo(update, context):
     if update.effective_user.id != ADMIN_ID:
         return
+    # If smm_flow is active, let smm.py handle it (group -1 runs first, but
+    # bot.py photo handler is group 0 — so we delegate explicitly here)
+    smm_flow = context.user_data.get("smm_flow")
+    if smm_flow and smm_flow.get("step") in ("edit_plat_image", "edit_root_image", "edit_image"):
+        return  # smm.py group -1 handler will catch it
     state = context.user_data.get("state")
     file_id = update.message.photo[-1].file_id
 
@@ -2895,6 +3157,27 @@ async def finish_product(update, context):
         + "Send /start and open the category to see it."
     )
 
+logging.basicConfig(
+    filename=os.path.join(BASE_DIR, "bot_errors.log"),
+    level=logging.ERROR,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+
+async def on_error(update, context):
+    """Catch every unhandled exception from any handler. Without this,
+    a failing /start or /users just goes silent with zero trace."""
+    tb = "".join(traceback.format_exception(None, context.error, context.error.__traceback__))
+    logging.error("Unhandled exception:\n%s", tb)
+    print("Unhandled exception:", tb)
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"⚠️ Bot error:\n<code>{html.escape(str(context.error))}</code>",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
 def main():
     print("Project folder:", BASE_DIR)
     s = load_settings()
@@ -2902,20 +3185,42 @@ def main():
 
     ensure_viewcart_button()
 
-    app = Application.builder().token(BOT_TOKEN).build()
+    persistence = PicklePersistence(filepath=os.path.join(BASE_DIR, "bot_persistence.pkl"), update_interval=1)
+
+    async def _post_init(application):
+        # Belt-and-suspenders fix: if anything (a hijacked/leaked token, a
+        # misconfigured service, anything) sets a webhook on this bot again in
+        # the future, polling would otherwise crash forever with "Conflict:
+        # can't use getUpdates method while webhook is active" every single
+        # restart. Clearing it here, on every startup, means one restart
+        # (which systemd already does automatically within 5s) is enough to
+        # self-heal instead of staying down indefinitely.
+        try:
+            info = await application.bot.get_webhook_info()
+            if info.url:
+                print(f"[startup] Webhook was active ({info.url}) - deleting it so polling can run.")
+                await application.bot.delete_webhook(drop_pending_updates=False)
+        except Exception as e:
+            print(f"[startup] Webhook check/delete failed: {e}")
+        await payments.resume_pending_orders(application)
+
+    app = Application.builder().token(BOT_TOKEN).persistence(persistence).post_init(_post_init).build()
     cart.setup(app, ADMIN_ID)
-    smm.setup(app, ADMIN_ID)
+    smm.setup(app, ADMIN_ID, BOT_TOKEN)
     payments.setup(app, ADMIN_ID, BOT_TOKEN)
     orders.register_gate(app)
     orders.register_commands(app)
     orders.register_order_buttons(app)
-    
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("getid", cmd_getid))
     app.add_handler(CommandHandler("commands", cmd_commands))
+    app.add_handler(CommandHandler("users", cmd_users))
     app.add_handler(CommandHandler("wallet", cmd_wallet))
     app.add_handler(CommandHandler("remove", cmd_remove))
     app.add_handler(CommandHandler("add", cmd_add))
+    app.add_handler(CommandHandler("dm", cmd_dm))
+    app.add_handler(CommandHandler("cancel", payments.cmd_cancel))
     app.add_handler(CommandHandler("ban", cmd_ban))
     app.add_handler(CommandHandler("unban", cmd_unban))
     app.add_handler(CommandHandler("active", cmd_active))
@@ -2925,13 +3230,22 @@ def main():
     app.add_handler(CommandHandler("setstock", cmd_set_stock))
     app.add_handler(CommandHandler("pause", cmd_pause))
     app.add_handler(CommandHandler("stockstatus", cmd_stock_status))
-    
+
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(MessageHandler(filters.PHOTO, on_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-    
+
+    app.add_error_handler(on_error)
+
     print("Bot running. /getid to capture emoji IDs.")
-    app.run_polling()
+    # Explicitly request every update type on every single poll cycle - not just
+    # at startup. This is what actually prevents the allowed_updates restriction
+    # from ever getting "stuck" again (which is what happened twice now): if we
+    # only reset it once, some other party (e.g. a hijacked webhook) can silently
+    # narrow it again later and callback_query taps would go dead with zero
+    # errors anywhere. Passing this on every getUpdates call means it can never
+    # drift from what the bot actually needs.
+    app.run_polling(allowed_updates=[])
 
 if __name__ == "__main__":
     main()

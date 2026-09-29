@@ -46,41 +46,6 @@
       "paused": false,
       "emoji_id": "5877576553172308576"
     },
-    "dd5383bb": {
-      "category": "ott",
-      "name": "Spotify",
-      "description": "Upgrade to Spotify Premium with full warranty for uninterrupted, ad-free music, offline downloads, and seamless listening across all your devices — and more.",
-      "image": "AgACAgUAAxkBAAIJQ2ofVnidoDBThrcXtY31TzxSN0WSAAJZEGsbodABVYt9mKeSarjcAQADAgADeQADOwQ",
-      "plans": [
-        {
-          "id": "c61534",
-          "name": "3 Months",
-          "price": "$12",
-          "image": "AgACAgUAAxkBAAIJTWofVw88VvOkmODvZEGtiOnWVrBJAAJaEGsbodABVfwiiNztZxgJAQADAgADeQADOwQ",
-          "stock": -1,
-          "paused": false
-        },
-        {
-          "id": "e5a895",
-          "name": "6 Months",
-          "price": "$25",
-          "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
-          "stock": -1,
-          "paused": false
-        },
-        {
-          "id": "67f7ae",
-          "name": "12 Months",
-          "price": "$50",
-          "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
-          "stock": -1,
-          "paused": false
-        }
-      ],
-      "stock": -1,
-      "paused": false,
-      "emoji_id": "5868508172108435919"
-    },
     "ba12b018": {
       "category": "ott",
       "name": "Prime Videos",
@@ -108,6 +73,25 @@
       "paused": false,
       "emoji_id": "5877697061364698656"
     },
+    "33d71e04": {
+      "category": "ott",
+      "name": "Crunchyroll",
+      "description": "Dive into unlimited anime with Crunchyroll Premium, offering ad-free streaming, offline viewing, and smooth access across your devices — all backed by full warranty.",
+      "image": "AgACAgUAAxkBAAIJumofW4QcRomTaZmhe9WWVqOYkKUCAAJdEGsbodABVYvJQDlZZFJsAQADAgADeQADOwQ",
+      "plans": [
+        {
+          "id": "617ae4",
+          "name": "12 Months",
+          "price": "$45",
+          "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5913528148154126357"
+    },
     "bd031159": {
       "category": "ott",
       "name": "Apple TV",
@@ -127,24 +111,32 @@
       "paused": false,
       "emoji_id": "4958909307987952352"
     },
-    "33d71e04": {
+    "30321f03": {
       "category": "ott",
-      "name": "Crunchyroll",
-      "description": "Dive into unlimited anime with Crunchyroll Premium, offering ad-free streaming, offline viewing, and smooth access across your devices — all backed by full warranty.",
-      "image": "AgACAgUAAxkBAAIJumofW4QcRomTaZmhe9WWVqOYkKUCAAJdEGsbodABVYvJQDlZZFJsAQADAgADeQADOwQ",
+      "name": "HBO Max",
+      "description": "Benefits  : Ad-free entertainment, offline downloads, exclusive HBO content & more....",
+      "image": "AgACAgUAAxkBAAIbHWqEBI9hXc6pVYrsODlT9pxbJ2_5AAJHEmsb3b4hVJKgjSJHj5qbAQADAgADeAADPQQ",
       "plans": [
         {
-          "id": "617ae4",
+          "id": "e0fbc3",
+          "name": "1 Month",
+          "price": "$10",
+          "image": "AgACAgUAAxkBAAIbJ2qEBQEeQ_aQidpAE10bUdQZ_lE7AAJIEmsb3b4hVFBCsuNKw74-AQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "819081",
           "name": "12 Months",
-          "price": "$45",
-          "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
+          "price": "$55",
+          "image": "AgACAgUAAxkBAAIbLWqEBS8P9-y7DeD9i_hZOhwebmmpAAJJEmsb3b4hVBmaHB5SyQvQAQADAgADeQADPQQ",
           "stock": -1,
           "paused": false
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5913528148154126357"
+      "emoji_id": "5877377880870097204"
     },
     "1305d148": {
       "category": "software",
@@ -246,7 +238,7 @@
         }
       ],
       "stock": -1,
-      "paused": false,
+      "paused": true,
       "emoji_id": "5877651964208091297"
     },
     "5562656c": {
@@ -295,32 +287,40 @@
       "paused": true,
       "emoji_id": "6105050957609968229"
     },
-    "30321f03": {
+    "dd5383bb": {
       "category": "ott",
-      "name": "HBO Max",
-      "description": "Benefits  : Ad-free entertainment, offline downloads, exclusive HBO content & more....",
-      "image": "AgACAgUAAxkBAAIbHWqEBI9hXc6pVYrsODlT9pxbJ2_5AAJHEmsb3b4hVJKgjSJHj5qbAQADAgADeAADPQQ",
+      "name": "Spotify",
+      "description": "Upgrade to Spotify Premium with full warranty for uninterrupted, ad-free music, offline downloads, and seamless listening across all your devices — and more.",
+      "image": "AgACAgUAAxkBAAIJQ2ofVnidoDBThrcXtY31TzxSN0WSAAJZEGsbodABVYt9mKeSarjcAQADAgADeQADOwQ",
       "plans": [
         {
-          "id": "e0fbc3",
-          "name": "1 Month",
-          "price": "$10",
-          "image": "AgACAgUAAxkBAAIbJ2qEBQEeQ_aQidpAE10bUdQZ_lE7AAJIEmsb3b4hVFBCsuNKw74-AQADAgADeQADPQQ",
+          "id": "c61534",
+          "name": "3 Months",
+          "price": "$15",
+          "image": "AgACAgUAAxkBAAIJTWofVw88VvOkmODvZEGtiOnWVrBJAAJaEGsbodABVfwiiNztZxgJAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
         },
         {
-          "id": "819081",
+          "id": "e5a895",
+          "name": "6 Months",
+          "price": "$25",
+          "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "67f7ae",
           "name": "12 Months",
-          "price": "$55",
-          "image": "AgACAgUAAxkBAAIbLWqEBS8P9-y7DeD9i_hZOhwebmmpAAJJEmsb3b4hVBmaHB5SyQvQAQADAgADeQADPQQ",
+          "price": "$50",
+          "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5877377880870097204"
+      "emoji_id": "5868508172108435919"
     },
     "f8114891": {
       "category": "software",
@@ -378,6 +378,63 @@
       "stock": -1,
       "paused": false,
       "emoji_id": "5796371348808799072"
+    },
+    "9431ba7c": {
+      "category": "ott",
+      "name": "Apple Music",
+      "description": "Enjoy Apple Music with full warranty, featuring ad-free listening, offline downloads, seamless playback across your devices, and access to millions of songs — all in one place",
+      "image": "AgACAgUAAxkBAAInY2qw22dQ-n9a7gaABXynBurjHGNbAAJMF2sbUPKJVbquOwgoGvipAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "c53b85",
+          "name": "6 Months",
+          "price": "$30",
+          "image": "AgACAgUAAxkBAAIne2qw3OpRwOGxuI1yWNmO3HtsSyD_AAJRF2sbUPKJVXFQyTATGvEtAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5872815276982014467"
+    },
+    "eb27abe6": {
+      "category": "software",
+      "name": "Adobe Express",
+      "description": "Create stunning designs, edit photos and videos, use premium templates, and bring your ideas to life with AI-powered tools",
+      "image": "AgACAgUAAxkBAAIp_2q5lh0GIuEGSVHINAiYKqNuPbJGAAJ-EWsbPHrRVSHnLls455QoAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "65059f",
+          "name": "12 Months",
+          "price": "$45",
+          "image": "AgACAgUAAxkBAAIqCmq5lmmleqylKQ-bCMSxbLmP39ihAAKVEmsbvanRVfJVOBgBygwJAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5877739680325179188"
+    },
+    "18c0e0ea": {
+      "category": "ai",
+      "name": "Notion Plus",
+      "description": "Unlimited pages, file uploads, collaboration tools, version history, and powerful features to organize your work and projects",
+      "image": "AgACAgUAAxkBAAIqkmq7AtRiCBLbBJcGUH5xp7hRtCW9AAKmEGsbr9nYVb-3qHv0w19vAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "a81554",
+          "name": "12 Months",
+          "price": "$45",
+          "image": "AgACAgUAAxkBAAIqCmq5lmmleqylKQ-bCMSxbLmP39ihAAKVEmsbvanRVfJVOBgBygwJAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "6298811268933367054"
     }
   }
 }

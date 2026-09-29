@@ -11,7 +11,8 @@
       "min_conf": 3,
       "is_usd_stable": false,
       "token_contract": null,
-      "emoji_id": "5829938927703691622"
+      "emoji_id": "5829938927703691622",
+      "window_minutes": 60
     },
     {
       "id": "ltc",

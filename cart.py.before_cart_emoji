@@ -49,14 +49,6 @@ def set_cart_image(file_id):
     d["image"] = file_id
     _save_cfg(d)
 
-def get_added_image():
-    return _load_cfg().get("added_image")
-
-def set_added_image(file_id):
-    d = _load_cfg()
-    d["added_image"] = file_id
-    _save_cfg(d)
-
 def _load_all():
     if not os.path.exists(CART_FILE):
         return {}
@@ -137,20 +129,12 @@ def _cart_total(items):
 def _added_screen(back_cb):
     """Screen shown right after an item is added to the cart."""
     text = "<b>Item Added To Cart Successfully</b>"
-    checkout_emoji = view_cart_emoji = back_emoji = None
-    try:
-        import bot
-        checkout_emoji = bot.get_action_emoji("checkout_more")
-        view_cart_emoji = bot.get_action_emoji("view_cart")
-        back_emoji = bot.get_action_emoji("back_button")
-    except Exception:
-        pass
-    rows = [
-        [{"text": "Checkout More Products", "callback_data": "home", "emoji_id": checkout_emoji}],
-        [{"text": "View Cart", "callback_data": "cart:open", "emoji_id": view_cart_emoji}],
-        [{"text": "Back", "callback_data": back_cb, "emoji_id": back_emoji}],
+    kb = [
+        [InlineKeyboardButton("Checkout More Products", callback_data="home")],
+        [InlineKeyboardButton("View Cart", callback_data="cart:open")],
+        [InlineKeyboardButton("Back", callback_data=back_cb)],
     ]
-    return text, rows, get_added_image()
+    return text, InlineKeyboardMarkup(kb)
 
 def _cart_screen(user_id, is_admin=False):
     items = _get_cart(user_id)
@@ -164,7 +148,6 @@ def _cart_screen(user_id, is_admin=False):
                 InlineKeyboardButton("Edit Cart Text", callback_data="cart:ctext"),
                 InlineKeyboardButton("Change Cart Image", callback_data="cart:cimg"),
             ])
-            kb.append([InlineKeyboardButton("Change 'Item Added' Image", callback_data="cart:aimg")])
         kb.append([InlineKeyboardButton("Back", callback_data="cart:close")])
         return text, InlineKeyboardMarkup(kb), photo
 
@@ -200,7 +183,6 @@ def _cart_screen(user_id, is_admin=False):
             InlineKeyboardButton("Edit Cart Text", callback_data="cart:ctext"),
             InlineKeyboardButton("Change Cart Image", callback_data="cart:cimg"),
         ])
-        kb.append([InlineKeyboardButton("Change 'Item Added' Image", callback_data="cart:aimg")])
     kb.append([InlineKeyboardButton("Back", callback_data="cart:close")])
     return NL.join(lines), InlineKeyboardMarkup(kb), photo
 
@@ -350,17 +332,6 @@ async def _on_callback(update, context):
         await query.answer()
         raise ApplicationHandlerStop
 
-    if action == "aimg":
-        if user_id != ADMIN_ID:
-            await query.answer("Not allowed", show_alert=True)
-            raise ApplicationHandlerStop
-        context.user_data["cart_flow"] = {"step": "edit_added_image"}
-        await _show(query, context,
-                    "Send the image for the 'Item Added To Cart Successfully' screen." + NL + "(send 0 to remove it, or /start to cancel)",
-                    InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="cart:open")]]))
-        await query.answer()
-        raise ApplicationHandlerStop
-
     # ----- add an OTT/VPN plan -----
     if action.startswith("addp:"):
         rest = action[5:]
@@ -369,9 +340,8 @@ async def _on_callback(update, context):
         if item:
             _add_item(user_id, item)
             await query.answer("Added to cart")
-            text, rows, photo = _added_screen("prod:" + pid)
-            import bot
-            await bot._show_screen(query, text, rows, photo)
+            text, kb = _added_screen("prod:" + pid)
+            await _show(query, context, text, kb)
         else:
             await query.answer("Could not add item", show_alert=True)
         raise ApplicationHandlerStop
@@ -387,9 +357,8 @@ async def _on_callback(update, context):
         if item:
             _add_item(user_id, item)
             await query.answer("Added to cart")
-            text, rows, photo = _added_screen("prod:" + pid)
-            import bot
-            await bot._show_screen(query, text, rows, photo)
+            text, kb = _added_screen("prod:" + pid)
+            await _show(query, context, text, kb)
         else:
             await query.answer("Could not add item", show_alert=True)
         raise ApplicationHandlerStop
@@ -426,9 +395,8 @@ async def _on_callback(update, context):
             })
             context.user_data.pop("cart_pending", None)
             await query.answer("Added to cart")
-            text, rows, photo = _added_screen("tgmenu")
-            import bot
-            await bot._show_screen(query, text, rows, photo)
+            text, kb = _added_screen("tgmenu")
+            await _show(query, context, text, kb)
         else:
             await query.answer("Could not add item", show_alert=True)
         raise ApplicationHandlerStop
@@ -452,9 +420,8 @@ async def _on_callback(update, context):
             back_cb = "smp:" + pend["pid"] if pend.get("pid") else "smr"
             context.user_data.pop("cart_pending", None)
             await query.answer("Added to cart")
-            text, rows, photo = _added_screen(back_cb)
-            import bot
-            await bot._show_screen(query, text, rows, photo)
+            text, kb = _added_screen(back_cb)
+            await _show(query, context, text, kb)
         else:
             await query.answer("Could not add item", show_alert=True)
         raise ApplicationHandlerStop
@@ -585,33 +552,19 @@ async def _on_text(update, context):
         else:
             await update.message.reply_text("Please send a photo, or send 0 to remove it.")
         raise ApplicationHandlerStop
-    if step == "edit_added_image":
-        if text == "0":
-            set_added_image(None)
-            context.user_data.pop("cart_flow", None)
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("View Cart", callback_data="cart:open")]])
-            await update.message.reply_text("'Item Added' image removed.", reply_markup=kb)
-        else:
-            await update.message.reply_text("Please send a photo, or send 0 to remove it.")
-        raise ApplicationHandlerStop
     return
 
 async def _on_photo(update, context):
     flow = context.user_data.get("cart_flow")
-    if not flow or flow.get("step") not in ("edit_cart_image", "edit_added_image"):
+    if not flow or flow.get("step") != "edit_cart_image":
         return
     if update.effective_user.id != ADMIN_ID:
         return
     file_id = update.message.photo[-1].file_id
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("View Cart", callback_data="cart:open")]])
-    if flow.get("step") == "edit_added_image":
-        set_added_image(file_id)
-        confirm_text = "'Item Added' image updated."
-    else:
-        set_cart_image(file_id)
-        confirm_text = "Cart image updated."
+    set_cart_image(file_id)
     context.user_data.pop("cart_flow", None)
-    await update.message.reply_text(confirm_text, reply_markup=kb)
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("View Cart", callback_data="cart:open")]])
+    await update.message.reply_text("Cart image updated.", reply_markup=kb)
     raise ApplicationHandlerStop
 
 def cart_count(user_id):

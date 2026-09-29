@@ -553,19 +553,11 @@ async def cmd_cancel(update, context):
 async def _begin_payment_raw(query, context, items, usd, source="cart"):
     user_id = query.from_user.id
     existing = context.user_data.get("pay_order")
-    if existing and existing.get("state") == "await_payment":
-        # Can't use query.answer(..., show_alert=True) here: every caller in
-        # cart.py has already answered this tap, and Telegram only allows one
-        # answer per callback query - a second one is silently rejected, which
-        # is why the guard blocked the order but no message ever showed up.
-        try:
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text=("You already have an ongoing order. Please use /cancel to cancel "
-                      "the previous transaction and make a new one."),
-            )
-        except Exception as e:
-            print(f"[payments] could not send ongoing-order notice: {e}")
+    if existing and existing.get("state") in ("choosing", "await_payment"):
+        await query.answer(
+            "You already have an ongoing order. Use /cancel to cancel it, then create a new one.",
+            show_alert=True,
+        )
         return
     if not items:
         await _render_buyer_raw(query, context, "<b>❌ Nothing to pay for.</b>",

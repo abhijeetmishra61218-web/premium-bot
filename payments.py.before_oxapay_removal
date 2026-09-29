@@ -92,6 +92,21 @@ def _save_crypto(updated):
             break
     save_cryptos(data)
 
+def _move_crypto(cid, direction):
+    """direction: -1 to move up (earlier), +1 to move down (later).
+    Display order on the buyer picker screen follows this list order."""
+    data = load_cryptos()
+    items = data["cryptos"]
+    idx = next((i for i, c in enumerate(items) if c["id"] == cid), None)
+    if idx is None:
+        return False
+    new_idx = idx + direction
+    if new_idx < 0 or new_idx >= len(items):
+        return False
+    items[idx], items[new_idx] = items[new_idx], items[idx]
+    save_cryptos(data)
+    return True
+
 # ========================= merchant key =========================
 def get_merchant_key():
     env_key = oxapay_client.get_env_key()
@@ -157,11 +172,22 @@ def _build_raw_keyboard(rows_spec):
         raw_row = []
         for btn in row:
             raw_btn = {"text": btn["text"], "callback_data": btn["callback_data"]}
-            if btn.get("emoji_id"):
-                raw_btn["icon_custom_emoji_id"] = btn["emoji_id"]
+            eid = btn.get("emoji_id")
+            if eid and str(eid).isdigit():
+                raw_btn["icon_custom_emoji_id"] = eid
             raw_row.append(raw_btn)
         raw_rows.append(raw_row)
     return {"inline_keyboard": raw_rows}
+
+class TelegramRawError(Exception):
+    pass
+
+def _raw_check(resp_json, what):
+    if isinstance(resp_json, dict) and resp_json.get("ok") is False:
+        desc = resp_json.get("description")
+        print(f"[payments] Telegram API rejected {what}: {desc}")
+        raise TelegramRawError(f"{what}: {desc}")
+    return resp_json
 
 async def raw_send_message(chat_id, text, keyboard_rows, photo=None, parse_mode="HTML"):
     global TG_API, BOT_TOKEN
@@ -175,14 +201,14 @@ async def raw_send_message(chat_id, text, keyboard_rows, photo=None, parse_mode=
         }
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.post(f"{TG_API}/sendPhoto", json=payload)
-        return r.json()
+        return _raw_check(r.json(), "sendPhoto")
     payload = {
         "chat_id": chat_id, "text": text, "parse_mode": parse_mode,
         "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.post(f"{TG_API}/sendMessage", json=payload)
-    return r.json()
+    return _raw_check(r.json(), "sendMessage")
 
 async def raw_edit_message(chat_id, message_id, text, keyboard_rows, photo=None, parse_mode="HTML"):
     global TG_API, BOT_TOKEN
@@ -197,14 +223,14 @@ async def raw_edit_message(chat_id, message_id, text, keyboard_rows, photo=None,
         }
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.post(f"{TG_API}/editMessageMedia", json=payload)
-        return r.json()
+        return _raw_check(r.json(), "editMessageMedia")
     payload = {
         "chat_id": chat_id, "message_id": message_id, "text": text,
         "parse_mode": parse_mode, "reply_markup": _build_raw_keyboard(keyboard_rows),
     }
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.post(f"{TG_API}/editMessageText", json=payload)
-    return r.json()
+    return _raw_check(r.json(), "editMessageText")
 
 # ========================= admin panels =========================
 def admin_home_panel():
@@ -247,6 +273,8 @@ def crypto_panel(cid):
     toggle = "Disable" if c.get("enabled") else "Enable"
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("🎨 Set Animated Emoji", callback_data="pay:emoji:" + cid)],
+        [InlineKeyboardButton("⬆️ Move Up", callback_data="pay:up:" + cid),
+         InlineKeyboardButton("⬇️ Move Down", callback_data="pay:dn:" + cid)],
         [InlineKeyboardButton("🔘 " + toggle, callback_data="pay:tgl:" + cid)],
         [InlineKeyboardButton("🗑️ Remove", callback_data="pay:rm:" + cid)],
         [InlineKeyboardButton("🔙 Back", callback_data="pay:admin")],
@@ -343,18 +371,38 @@ def _amount_display(order):
 
 # ========== PICKER SCREEN WITH ANIMATED EMOJIS using RAW API ==========
 def _build_crypto_buttons_raw(cryptos):
+    # BTC gets its own full-width row; USDT (TRC20) through USDC (SOL)
+    # pack 2-per-row (double width) in their existing order; everything
+    # from LTC onward keeps the original default 3-per-row packing.
     rows = []
     current_row = []
+    current_cap = None
+    tail_started = False
+
+    def flush():
+        nonlocal current_row
+        if current_row:
+            rows.append(current_row)
+            current_row = []
+
     for c in cryptos:
+        currency = c.get("oxapay_currency", "")
+        if not tail_started and currency == "LTC":
+            tail_started = True
+        if tail_started:
+            cap = 3
+        elif currency == "BTC":
+            cap = 1
+        else:
+            cap = 2
+        if cap != current_cap or len(current_row) >= cap:
+            flush()
+            current_cap = cap
         button = {"text": c["name"], "callback_data": "pay:pick:" + c["id"]}
         if c.get("emoji_id"):
             button["emoji_id"] = c["emoji_id"]
         current_row.append(button)
-        if len(current_row) >= 2:
-            rows.append(current_row)
-            current_row = []
-    if current_row:
-        rows.append(current_row)
+    flush()
     return rows
 
 def _picker_screen_raw(is_admin=False, show_wallet=False, wallet_balance=0.0, note=None):
@@ -1142,6 +1190,17 @@ async def _on_callback(update, context):
                          f"4. Send that ID here\n\n"
                          f"Or send 0 to REMOVE the current emoji.")
         await query.answer()
+        raise ApplicationHandlerStop
+
+    if action.startswith("up:") or action.startswith("dn:"):
+        direction = -1 if action.startswith("up:") else 1
+        cid = action.split(":", 1)[1]
+        moved = _move_crypto(cid, direction)
+        res = crypto_panel(cid)
+        if res:
+            text, kb = res
+            await _safe_edit(query, context, text, kb)
+        await query.answer("Moved" if moved else "Already at that end")
         raise ApplicationHandlerStop
 
     if action.startswith("tgl:"):
