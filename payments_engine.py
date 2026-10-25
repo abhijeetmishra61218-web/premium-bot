@@ -36,7 +36,7 @@ ETH_RPCS = [
 ]
 BSCSCAN_API = "https://api.etherscan.io/v2/api"
 ETHERSCAN_API = "https://api.etherscan.io/v2/api"
-COINGECKO_PRICE = "https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
+COINBASE_PRICE = "https://api.coinbase.com/v2/prices/{symbol}-USD/spot"
 
 BSCSCAN_API_KEY = "3EVGFMHJTRURZZRSK9FCP7BD8AZ6D7QCZ4"
 ETHERSCAN_API_KEY = "3EVGFMHJTRURZZRSK9FCP7BD8AZ6D7QCZ4"  # etherscan v2 API is shared across chains via chainid param
@@ -201,9 +201,18 @@ def get_usd_price(coingecko_id):
     cached = _PRICE_CACHE.get(coingecko_id)
     if cached and (now - cached[0]) < _PRICE_TTL:
         return cached[1]
+    symbol_map = {
+        "bitcoin": "BTC",
+        "litecoin": "LTC",
+        "solana": "SOL",
+        "ethereum": "ETH",
+    }
+    symbol = symbol_map.get(coingecko_id)
+    if not symbol:
+        return 1.0 if coingecko_id in ("tether", "usd-coin") else None
     try:
-        data = _http_get(COINGECKO_PRICE.format(ids=coingecko_id))
-        price = float(data[coingecko_id]["usd"])
+        data = _http_get(COINBASE_PRICE.format(symbol=symbol))
+        price = float(data["data"]["amount"])
         _PRICE_CACHE[coingecko_id] = (now, price)
         return price
     except Exception:

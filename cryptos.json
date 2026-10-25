@@ -12,7 +12,7 @@
       "is_usd_stable": false,
       "token_contract": null,
       "emoji_id": "5829938927703691622",
-      "window_minutes": 60
+      "window_minutes": 120
     },
     {
       "id": "ltc",
@@ -25,7 +25,8 @@
       "min_conf": 2,
       "is_usd_stable": false,
       "token_contract": null,
-      "emoji_id": "5829979991886011025"
+      "emoji_id": "5829979991886011025",
+      "window_minutes": 60
     },
     {
       "id": "sol",
@@ -38,7 +39,8 @@
       "min_conf": 1,
       "is_usd_stable": false,
       "token_contract": null,
-      "emoji_id": "5829944446736667124"
+      "emoji_id": "5829944446736667124",
+      "window_minutes": 60
     },
     {
       "id": "usdt_trc20",
@@ -48,10 +50,11 @@
       "coingecko_id": "tether",
       "decimals": 6,
       "enabled": true,
-      "min_conf": 20,
+      "min_conf": 10,
       "is_usd_stable": true,
       "token_contract": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
-      "emoji_id": "5832692572971077565"
+      "emoji_id": "5832692572971077565",
+      "window_minutes": 60
     },
     {
       "id": "usdt_bep20",
@@ -61,10 +64,11 @@
       "coingecko_id": "tether",
       "decimals": 18,
       "enabled": true,
-      "min_conf": 12,
+      "min_conf": 1,
       "is_usd_stable": true,
       "token_contract": "0x55d398326f99059fF775485246999027B3197955",
-      "emoji_id": "5829978819359937589"
+      "emoji_id": "5829978819359937589",
+      "window_minutes": 60
     },
     {
       "id": "eth",
@@ -74,10 +78,11 @@
       "coingecko_id": "ethereum",
       "decimals": 18,
       "enabled": true,
-      "min_conf": 12,
+      "min_conf": 6,
       "is_usd_stable": false,
       "token_contract": null,
-      "emoji_id": "5830292326202741807"
+      "emoji_id": "5830292326202741807",
+      "window_minutes": 60
     },
     {
       "id": "usdc_erc20",
@@ -87,10 +92,11 @@
       "coingecko_id": "usd-coin",
       "decimals": 6,
       "enabled": true,
-      "min_conf": 12,
+      "min_conf": 1,
       "is_usd_stable": true,
       "token_contract": "0xA0b86991c6218b36C1D19D4a2e9Eb0cE3606eB48",
-      "emoji_id": "5829943407354582226"
+      "emoji_id": "5829943407354582226",
+      "window_minutes": 60
     },
     {
       "id": "usdc_sol",
@@ -103,10 +109,11 @@
       "min_conf": 1,
       "is_usd_stable": true,
       "token_contract": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-      "emoji_id": "5829943407354582226"
+      "emoji_id": "5829943407354582226",
+      "window_minutes": 60
     }
   ],
   "picker_text": "Please choose your preferred cryptocurrency for payment",
-  "pay_image": null,
+  "pay_image": "AgACAgUAAxkBAAIyRGrd9YVXkfqrbw4YQqNw-Tl6IL5RAAIqEWsbu2XxVozoXs0uI_WeAQADAgADeQADPQQ",
   "wallet_image": "AgACAgUAAxkBAAIkwmqwBEDTq2GQk4DvC4VWu5spOe7kAAIsFmsbUPKBVYF4WJOHwfgIAQADAgADeQADPQQ"
 }

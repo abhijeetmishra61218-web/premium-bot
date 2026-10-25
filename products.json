@@ -105,6 +105,14 @@
           "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
+        },
+        {
+          "id": "de0e25",
+          "name": "12 Months",
+          "price": "$60",
+          "image": "AgACAgUAAxkBAAItDGrFlUBhW8FVQYmb1q168HK2sPQGAAIDEGsbmlUxVokRumjRCvBjAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
         }
       ],
       "stock": -1,
@@ -197,6 +205,14 @@
           "image": "AgACAgUAAxkBAAIJTWofVw88VvOkmODvZEGtiOnWVrBJAAJaEGsbodABVfwiiNztZxgJAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false
+        },
+        {
+          "id": "b278fc",
+          "name": "12 Months",
+          "price": "$60",
+          "image": "AgACAgUAAxkBAAItg2rIS50ESCOkYCjGEa25VowY0Db8AAKREGsbmCFAVpkMMQUc-XneAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
         }
       ],
       "stock": -1,
@@ -238,54 +254,54 @@
         }
       ],
       "stock": -1,
-      "paused": true,
+      "paused": false,
       "emoji_id": "5877651964208091297"
     },
-    "5562656c": {
+    "5dbabd41": {
       "category": "ai",
-      "name": "Perplexity",
-      "description": "Need fast, reliable answers without digging through dozens of links? Perplexity Pro combines AI and real-time web data to give you clear, well-sourced results in seconds.",
-      "image": "AgACAgUAAxkBAAIRQGo3q30HQHpryPSmyt_DQSNNoPqvAAJdE2sb8-7AVWYwNnNdHlcxAQADAgADeQADPAQ",
+      "name": "Claude API",
+      "description": "Access Claude Opus 4.8, Opus 5 and Sonnet 5 models through a third-party API provider for advanced coding, debugging, website development, AI automation and complex problem-solving, with support for compatible tools like Claude Code and other API clients",
+      "image": "AgACAgUAAxkBAAIwn2rYEEJtKISNL5s9ESs4IG40odaAAALKFWsbbnDBVuLvt8VcSq0zAQADAgADeQADPQQ",
       "plans": [
         {
-          "id": "f304fb",
-          "name": "1 Month",
-          "price": "$12",
-          "image": "AgACAgUAAxkBAAIRSGo3q9SDLFRxAycNBcbuG0oz5yXWAAJhE2sb8-7AVZTeYquTqnKdAQADAgADeQADPAQ",
+          "id": "d03dfd",
+          "name": "$100 API",
+          "price": "$25",
+          "image": "AgACAgUAAxkBAAIwqWrYEmJrLLTFZ7EgnFPsvGKAnZOLAALNFWsbbnDBVpPlVR8MxtikAQADAgADeQADPQQ",
           "stock": -1,
           "paused": false
         },
         {
-          "id": "4861db",
-          "name": "12 Months",
-          "price": "$75",
-          "image": "AgACAgUAAxkBAAIRUWo3q_5sYgla7eNvQ024OZIbVmspAAJpE2sb8-7AVdtKIB25N5DEAQADAgADeQADPAQ",
-          "stock": -1,
-          "paused": false
-        }
-      ],
-      "stock": 0,
-      "paused": true,
-      "emoji_id": "5386400897746100321"
-    },
-    "ab05ee54": {
-      "category": "ai",
-      "name": "Replit Pro",
-      "description": "Replit Pro includes faster AI assistance, higher usage limits, private Repls, improved performance, additional compute resources, custom domains, always-on deployments, advanced collaboration tools, and priority access to the latest features.",
-      "image": "AgACAgUAAxkBAAIRmGo5PUWqAy_F1g7NhJJRqPHNUGzrAAJIGmsb8-7IVZIqPjfAw9wCAQADAgADeQADPAQ",
-      "plans": [
-        {
-          "id": "0666e7",
-          "name": "1 Month",
-          "price": "$35",
-          "image": "AgACAgUAAxkBAAIRomo5P_dqW23hVM_OODiQk_LGfEzLAAJkGmsb8-7IVUjAh5SkFZOMAQADAgADeQADPAQ",
+          "id": "6f92e9",
+          "name": "$500 API",
+          "price": "$70",
+          "image": "AgACAgUAAxkBAAIwr2rYEnVuRP4MwKS-OLXrwEOiqQmIAALOFWsbbnDBVi2ycVMtqbAdAQADAgADeQADPQQ",
           "stock": -1,
           "paused": false
         }
       ],
       "stock": -1,
-      "paused": true,
-      "emoji_id": "6105050957609968229"
+      "paused": false,
+      "emoji_id": "6174520215376763867"
+    },
+    "18c0e0ea": {
+      "category": "ai",
+      "name": "Notion Plus",
+      "description": "Unlimited pages, file uploads, collaboration tools, version history, and powerful features to organize your work and projects",
+      "image": "AgACAgUAAxkBAAIqkmq7AtRiCBLbBJcGUH5xp7hRtCW9AAKmEGsbr9nYVb-3qHv0w19vAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "a81554",
+          "name": "12 Months",
+          "price": "$45",
+          "image": "AgACAgUAAxkBAAIqCmq5lmmleqylKQ-bCMSxbLmP39ihAAKVEmsbvanRVfJVOBgBygwJAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "6298811268933367054"
     },
     "dd5383bb": {
       "category": "ott",
@@ -407,7 +423,7 @@
         {
           "id": "65059f",
           "name": "12 Months",
-          "price": "$45",
+          "price": "$55",
           "image": "AgACAgUAAxkBAAIqCmq5lmmleqylKQ-bCMSxbLmP39ihAAKVEmsbvanRVfJVOBgBygwJAQADAgADeQADPQQ",
           "stock": -1,
           "paused": false
@@ -417,24 +433,124 @@
       "paused": false,
       "emoji_id": "5877739680325179188"
     },
-    "18c0e0ea": {
+    "d6201729": {
       "category": "ai",
-      "name": "Notion Plus",
-      "description": "Unlimited pages, file uploads, collaboration tools, version history, and powerful features to organize your work and projects",
-      "image": "AgACAgUAAxkBAAIqkmq7AtRiCBLbBJcGUH5xp7hRtCW9AAKmEGsbr9nYVb-3qHv0w19vAQADAgADeQADPQQ",
+      "name": "Muse AI",
+      "description": "Personal AI agent with advanced task automation, web browsing, email and calendar management, online shopping, travel bookings and background task execution",
+      "image": "AgACAgUAAxkBAAIxQ2rZ1HIhM8Jl-XA3DfNEReAXRUeAAAL8FWsbbnDRVuBcMOUTHdjqAQADAgADeQADPQQ",
       "plans": [
         {
-          "id": "a81554",
-          "name": "12 Months",
-          "price": "$45",
-          "image": "AgACAgUAAxkBAAIqCmq5lmmleqylKQ-bCMSxbLmP39ihAAKVEmsbvanRVfJVOBgBygwJAQADAgADeQADPQQ",
+          "id": "7a4a48",
+          "name": "1 Billion Tokens",
+          "price": "$15",
+          "image": "AgACAgUAAxkBAAIxMGrZ0qAZL10GxNxa5Od4wF7BebRkAAL6FWsbbnDRVqTNwD75LvOrAQADAgADeQADPQQ",
           "stock": -1,
           "paused": false
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "6298811268933367054"
+      "emoji_id": "6255899967211184618"
+    },
+    "8d4ba6fa": {
+      "category": "ai",
+      "name": "ElevenLabs Creator",
+      "description": "Professional voice cloning, high-quality AI voices, multilingual support, commercial usage, advanced voice tools, and generous monthly credits for creating professional content",
+      "image": "AgACAgUAAxkBAAIr_GrATyjgjlnygN6bzsCQXOg-EEdjAAJ8GmsbzlAAAVbuZKTQSME2EwEAAwIAA3kAAz0E",
+      "plans": [
+        {
+          "id": "1b8eb3",
+          "name": "1 Month",
+          "price": "$15",
+          "image": "AgACAgUAAxkBAAIxz2rbd-Bg0JaOMDLprF5zoG99BHaxAAIOEGsbT0rgVkb6bc909DEjAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "988da6",
+          "name": "3 Months",
+          "price": "$35",
+          "image": "AgACAgUAAxkBAAIsCGrAT4Tb470gkiFe6z97ZeGc1gN1AAJrEWsbrNoJVvZSrb5x27PeAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "6219689196722854904"
+    },
+    "8f3bade4": {
+      "category": "ott",
+      "name": "Deezer",
+      "description": "Deezer Premium gives you an ad-free listening experience, offline music downloads, high-quality audio, unlimited skips, and on-demand playback of your favorite songs and playlists",
+      "image": "AgACAgUAAxkBAAIu0WrVuLrlvnnzJAawN3uH-dHwtLs0AALpGWsblpupVuFAqX15jzVfAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "b0b727",
+          "name": "1 Month",
+          "price": "$7",
+          "image": "AgACAgUAAxkBAAIu22rVuOFLgDMAAf7Dyj0vVk9h7VyrXwAC7BlrG5abqVaI9lq8YAvrtQEAAwIAA3kAAz0E",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "e983b2",
+          "name": "3 Months",
+          "price": "$20",
+          "image": "AgACAgUAAxkBAAIu8WrVx3GZvS79ivgZHCLJJWpuakAzAAJeGmsblpupVgr6nFFEhdFHAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5899774597720445767"
+    },
+    "5562656c": {
+      "category": "ai",
+      "name": "Perplexity",
+      "description": "Need fast, reliable answers without digging through dozens of links? Perplexity Pro combines AI and real-time web data to give you clear, well-sourced results in seconds.",
+      "image": "AgACAgUAAxkBAAIRQGo3q30HQHpryPSmyt_DQSNNoPqvAAJdE2sb8-7AVWYwNnNdHlcxAQADAgADeQADPAQ",
+      "plans": [
+        {
+          "id": "f304fb",
+          "name": "1 Month",
+          "price": "$12",
+          "image": "AgACAgUAAxkBAAIRSGo3q9SDLFRxAycNBcbuG0oz5yXWAAJhE2sb8-7AVZTeYquTqnKdAQADAgADeQADPAQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "4861db",
+          "name": "12 Months",
+          "price": "$75",
+          "image": "AgACAgUAAxkBAAIRUWo3q_5sYgla7eNvQ024OZIbVmspAAJpE2sb8-7AVdtKIB25N5DEAQADAgADeQADPAQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": 0,
+      "paused": false,
+      "emoji_id": "5386400897746100321"
+    },
+    "ab05ee54": {
+      "category": "ai",
+      "name": "Replit Pro",
+      "description": "Replit Pro includes faster AI assistance, higher usage limits, private Repls, improved performance, additional compute resources, custom domains, always-on deployments, advanced collaboration tools, and priority access to the latest features.",
+      "image": "AgACAgUAAxkBAAIRmGo5PUWqAy_F1g7NhJJRqPHNUGzrAAJIGmsb8-7IVZIqPjfAw9wCAQADAgADeQADPAQ",
+      "plans": [
+        {
+          "id": "0666e7",
+          "name": "1 Month",
+          "price": "$35",
+          "image": "AgACAgUAAxkBAAIRomo5P_dqW23hVM_OODiQk_LGfEzLAAJkGmsb8-7IVUjAh5SkFZOMAQADAgADeQADPAQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": 0,
+      "paused": false,
+      "emoji_id": "6105050957609968229"
     }
   }
 }

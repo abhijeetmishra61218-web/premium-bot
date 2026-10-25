@@ -29,7 +29,7 @@ import store
 import orders
 
 # --- Your settings ---
-BOT_TOKEN = "8712977638:AAFyazkpU-69d-5aokGYN_vb3JHWk6u_GfE"
+BOT_TOKEN = "8712977638:AAH5Jd61LPXFNbdZn0Sp39RKUgG6kV18Qlg"
 ADMIN_ID = 6684244590
 # ---------------------
 
