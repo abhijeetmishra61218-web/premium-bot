@@ -25,7 +25,10 @@ for f in products.json settings.json menu.json action_emojis.json cart_config.js
   [ -e "$f" ] && git add -f -- "$f"          # a missing file must never stop the others
 done
 
-if git diff --cached --quiet; then
+git fetch -q origin main 2>/dev/null          # so we know what GitHub already has
+UNSENT="$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)"
+
+if git diff --cached --quiet && [ "${UNSENT:-0}" = "0" ]; then
   echo "Nothing new - GitHub is already up to date."
   touch "$MARK"
   exit 0
@@ -37,6 +40,14 @@ if git diff --cached | grep -qE '^\+.*[0-9]{8,}:[A-Za-z0-9_-]{30,}'; then
   exit 1
 fi
 
-git commit -q -m "Auto sync: $(date '+%Y-%m-%d %H:%M')" && git push -q origin main \
-  && { echo "Uploaded to GitHub."; touch "$MARK"; } \
-  || { echo "UPLOAD FAILED - check the GitHub login (see the instructions)."; exit 1; }
+if ! git diff --cached --quiet; then
+  git commit -q -m "Auto sync: $(date '+%Y-%m-%d %H:%M')" || { echo "Could not save the changes (git commit failed)."; exit 1; }
+fi
+if git push -q origin main; then
+  echo "Uploaded to GitHub."
+  touch "$MARK"
+else
+  echo "UPLOAD FAILED. The changes are saved on the server and will be retried on the next run."
+  echo "Common reasons: GitHub login/token expired, or GitHub's secret scanner blocked a file (read the message above)."
+  exit 1
+fi
