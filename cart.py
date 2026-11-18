@@ -106,6 +106,11 @@ def _add_item(user_id, item):
     item["cid"] = uuid.uuid4().hex[:8]
     items.append(item)
     _set_cart(user_id, items)
+    try:
+        import analytics
+        analytics.track_cart_add(user_id, item)
+    except Exception:
+        pass
 
 def _money(value):
     try:
@@ -152,24 +157,36 @@ def _added_screen(back_cb):
     ]
     return text, rows, get_added_image()
 
+def _ae(key):
+    """Animated/custom emoji id for an action button (None if not set)."""
+    try:
+        import bot
+        return bot.get_action_emoji(key)
+    except Exception:
+        return None
+
+def _admin_cart_rows():
+    return [
+        [{"text": "Edit Cart Text", "callback_data": "cart:ctext", "emoji_id": None},
+         {"text": "Change Cart Image", "callback_data": "cart:cimg", "emoji_id": None}],
+        [{"text": "Change 'Item Added' Image", "callback_data": "cart:aimg", "emoji_id": None}],
+    ]
+
 def _cart_screen(user_id, is_admin=False):
+    """Returns (text, raw_rows, photo). Rows are dicts so buttons can carry
+    animated emoji (rendered through the raw Bot API)."""
     items = _get_cart(user_id)
     heading = "<b>" + html.escape(get_cart_text()) + "</b>"
     photo = get_cart_image()
+    back_row = [{"text": "Back", "callback_data": "cart:close", "emoji_id": _ae("back_button")}]
     if not items:
         text = heading + NL + NL + "Your cart is empty." + NL + "Browse the menu and tap 'Add to Cart'."
-        kb = []
-        if is_admin:
-            kb.append([
-                InlineKeyboardButton("Edit Cart Text", callback_data="cart:ctext"),
-                InlineKeyboardButton("Change Cart Image", callback_data="cart:cimg"),
-            ])
-            kb.append([InlineKeyboardButton("Change 'Item Added' Image", callback_data="cart:aimg")])
-        kb.append([InlineKeyboardButton("Back", callback_data="cart:close")])
-        return text, InlineKeyboardMarkup(kb), photo
+        rows = _admin_cart_rows() if is_admin else []
+        rows.append(back_row)
+        return text, rows, photo
 
     lines = [heading, ""]
-    kb = []
+    rows = []
     for i, it in enumerate(items, start=1):
         lt = _line_total(it)
         if it.get("kind") == "smm":
@@ -178,31 +195,27 @@ def _cart_screen(user_id, is_admin=False):
             desc = it["title"] + "  x" + str(it["qty"])
         if it.get("target"):
             desc += "  (" + it["target"] + ")"
-        lines.append("<b>" + str(i) + ".</b> " + desc + " - <b>" + _money(lt) + "</b>")
+        lines.append("<b>" + str(i) + ". " + html.escape(desc) + " - " + _money(lt) + "</b>")
         if it.get("kind") == "smm":
             minus_lbl = "\u2796 less"
             plus_lbl = "\u2795 more"
         else:
             minus_lbl = "\u2796 1"
             plus_lbl = "\u2795 1"
-        kb.append([
-            InlineKeyboardButton(minus_lbl, callback_data="cart:dec:" + it["cid"]),
-            InlineKeyboardButton("\U0001F5D1 Remove #" + str(i), callback_data="cart:del:" + it["cid"]),
-            InlineKeyboardButton(plus_lbl, callback_data="cart:inc:" + it["cid"]),
+        rows.append([
+            {"text": minus_lbl, "callback_data": "cart:dec:" + it["cid"], "emoji_id": None},
+            {"text": "Remove #" + str(i), "callback_data": "cart:del:" + it["cid"], "emoji_id": None},
+            {"text": plus_lbl, "callback_data": "cart:inc:" + it["cid"], "emoji_id": None},
         ])
 
     lines.append("")
     lines.append("<b>Total : " + _money(_cart_total(items)) + "</b>")
-    kb.append([InlineKeyboardButton("Checkout", callback_data="cart:checkout")])
-    kb.append([InlineKeyboardButton("Clear Cart", callback_data="cart:clear")])
+    rows.append([{"text": "Checkout", "callback_data": "cart:checkout", "emoji_id": _ae("checkout")}])
+    rows.append([{"text": "Clear Cart", "callback_data": "cart:clear", "emoji_id": _ae("clear_cart")}])
     if is_admin:
-        kb.append([
-            InlineKeyboardButton("Edit Cart Text", callback_data="cart:ctext"),
-            InlineKeyboardButton("Change Cart Image", callback_data="cart:cimg"),
-        ])
-        kb.append([InlineKeyboardButton("Change 'Item Added' Image", callback_data="cart:aimg")])
-    kb.append([InlineKeyboardButton("Back", callback_data="cart:close")])
-    return NL.join(lines), InlineKeyboardMarkup(kb), photo
+        rows.extend(_admin_cart_rows())
+    rows.append(back_row)
+    return NL.join(lines), rows, photo
 
 def _checkout_screen(user_id):
     items = _get_cart(user_id)
@@ -243,30 +256,11 @@ async def _show(query, context, text, kb):
         except Exception:
             pass
 
-async def _render_cart(query, context, text, kb, photo):
-    """Edit the current message into the cart (supports an optional image)."""
-    msg = query.message
-    has_photo = bool(msg.photo)
-    want_photo = photo is not None
-    if want_photo and has_photo:
-        try:
-            return await msg.edit_media(
-                media=InputMediaPhoto(media=photo, caption=text, parse_mode="HTML"), reply_markup=kb)
-        except Exception:
-            pass
-    elif (not want_photo) and (not has_photo):
-        try:
-            return await msg.edit_text(text, reply_markup=kb, parse_mode="HTML")
-        except Exception:
-            pass
-    try:
-        await msg.delete()
-    except Exception:
-        pass
-    if want_photo:
-        return await context.bot.send_photo(chat_id=msg.chat_id, photo=photo, caption=text,
-                                            reply_markup=kb, parse_mode="HTML")
-    return await context.bot.send_message(chat_id=msg.chat_id, text=text, reply_markup=kb, parse_mode="HTML")
+async def _render_cart(query, context, text, rows, photo):
+    """Turn the current message into the cart screen (raw API, so button
+    emoji work). Handles photo<->text switches by delete + resend."""
+    import bot
+    await bot._show_screen(query, text, rows, photo)
 
 def _item_from_product(pid, plan_id, qty=1):
     """OTT / VPN plan -> a cart item. Reads live data from bot.py."""
@@ -284,6 +278,8 @@ def _item_from_product(pid, plan_id, qty=1):
             return None
         return {
             "kind": "plan",
+            "pid": pid,
+            "plan_id": plan_id,
             "title": product["name"] + " - " + plan["name"],
             "product": product["name"],
             "plan": plan["name"],
@@ -309,11 +305,8 @@ async def _on_callback(update, context):
         is_admin = (user_id == ADMIN_ID)
         text, kb, photo = _cart_screen(user_id, is_admin)
         if query.message.photo or query.message.text is None:
-            if photo:
-                await context.bot.send_photo(chat_id=query.message.chat_id, photo=photo,
-                                             caption=text, reply_markup=kb, parse_mode="HTML")
-            else:
-                await query.message.reply_text(text, reply_markup=kb, parse_mode="HTML")
+            import bot
+            await bot.raw_send_message(query.message.chat_id, text, kb, photo)
         else:
             await _render_cart(query, context, text, kb, photo)
         await query.answer()
@@ -547,8 +540,8 @@ async def _on_callback(update, context):
                 await query.message.delete()
             except Exception:
                 pass
-            await context.bot.send_message(chat_id=query.message.chat_id, text=text,
-                                           reply_markup=kb, parse_mode="HTML")
+            import bot
+            await bot.raw_send_message(query.message.chat_id, text, kb, photo)
         raise ApplicationHandlerStop
 
     # ----- checkout -> crypto payment -----

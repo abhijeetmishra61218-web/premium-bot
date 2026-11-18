@@ -2,7 +2,7 @@
   "items": {
     "0ef10521": {
       "category": "ott",
-      "name": "YT Premium",
+      "name": "YouTube Premium",
       "description": "Enjoy YouTube Premium with ad-free streaming, offline downloads, background play, and YouTube Music included — comes with full Warranty.",
       "image": "AgACAgUAAxkBAAIIW2ofSbEFUwSMlHFPFaUHe7ci8D2MAAJMEGsbodABVQ9TukEOEartAQADAgADeQADOwQ",
       "plans": [
@@ -12,12 +12,17 @@
           "price": "$60",
           "image": "AgACAgUAAxkBAAIH-WofQIhDMlldmO1_cywwSBxs01MZAAJFEGsbodABVUjn9iC8dsR9AQADAgADeQADOwQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5334681713316479679"
+      "emoji_id": "5334681713316479679",
+      "button_name": "YT Premium",
+      "warranty": 12,
+      "success_video": "CgACAgUAAxkBAAI11Wri80oGshP62Wu3AAGbjuNeN6smnQACYiIAAgoDGFdMJNUoCwJBQT0E",
+      "success_video_type": "animation"
     },
     "06c39f59": {
       "category": "ott",
@@ -31,7 +36,8 @@
           "price": "$60",
           "image": "AgACAgUAAxkBAAIJP2ofVavaekt_rqOjllSNc_BqVBBkAAJYEGsbodABVeZ6qMndqPFTAQADAgADeQADOwQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 6
         },
         {
           "id": "9f4c27",
@@ -39,12 +45,15 @@
           "price": "$100",
           "image": "AgACAgUAAxkBAAIJLmofVQ0AAVYjj3mgHQ_yqEAsLrl_NQACVxBrG6HQAVUAAa9DxDgewBsBAAMCAAN5AAM7BA",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5877576553172308576"
+      "emoji_id": "5877576553172308576",
+      "success_video": "CgACAgUAAxkBAAI12Wri86dBkfRZ8kM1TPVhs9tl4hIuAAJjIgACCgMYVxzUnlcp5RYHPQQ",
+      "success_video_type": "animation"
     },
     "ba12b018": {
       "category": "ott",
@@ -58,7 +67,8 @@
           "price": "$25",
           "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 6
         },
         {
           "id": "b33510",
@@ -66,16 +76,19 @@
           "price": "$50",
           "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5877697061364698656"
+      "emoji_id": "5877697061364698656",
+      "success_video": "CgACAgUAAxkBAAI1xWri8mEl5_Zh3fhyHFPZyBLURn9LAAJfIgACCgMYV9nHLUoHnfo2PQQ",
+      "success_video_type": "animation"
     },
     "33d71e04": {
       "category": "ott",
-      "name": "Crunchyroll",
+      "name": "Crunchyroll - Mega Fan Plan",
       "description": "Dive into unlimited anime with Crunchyroll Premium, offering ad-free streaming, offline viewing, and smooth access across your devices — all backed by full warranty.",
       "image": "AgACAgUAAxkBAAIJumofW4QcRomTaZmhe9WWVqOYkKUCAAJdEGsbodABVYvJQDlZZFJsAQADAgADeQADOwQ",
       "plans": [
@@ -85,12 +98,16 @@
           "price": "$45",
           "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5913528148154126357"
+      "emoji_id": "5913528148154126357",
+      "button_name": "Crunchyroll",
+      "success_video": "CgACAgUAAxkBAAI14Wri9DIpbmhu6r_IwFXURbM53ICrAAJnIgACCgMYV_MkzPObG8vEPQQ",
+      "success_video_type": "animation"
     },
     "bd031159": {
       "category": "ott",
@@ -104,7 +121,8 @@
           "price": "$35",
           "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 6
         },
         {
           "id": "de0e25",
@@ -112,12 +130,15 @@
           "price": "$60",
           "image": "AgACAgUAAxkBAAItDGrFlUBhW8FVQYmb1q168HK2sPQGAAIDEGsbmlUxVokRumjRCvBjAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "4958909307987952352"
+      "emoji_id": "4958909307987952352",
+      "success_video": "CgACAgUAAxkBAAI122ri882WuJ4AAc65efOt4LYITE-f-QACZCIAAgoDGFeYobkG8HGyXz0E",
+      "success_video_type": "animation"
     },
     "30321f03": {
       "category": "ott",
@@ -131,7 +152,8 @@
           "price": "$10",
           "image": "AgACAgUAAxkBAAIbJ2qEBQEeQ_aQidpAE10bUdQZ_lE7AAJIEmsb3b4hVFBCsuNKw74-AQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 1
         },
         {
           "id": "819081",
@@ -139,12 +161,15 @@
           "price": "$55",
           "image": "AgACAgUAAxkBAAIbLWqEBS8P9-y7DeD9i_hZOhwebmmpAAJJEmsb3b4hVBmaHB5SyQvQAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5877377880870097204"
+      "emoji_id": "5877377880870097204",
+      "success_video": "CgACAgUAAxkBAAI1x2ri8ne270rNfHT77Qy-pYbJjjfZAAJgIgACCgMYV4iLbUkNYdmTPQQ",
+      "success_video_type": "animation"
     },
     "1305d148": {
       "category": "software",
@@ -155,42 +180,39 @@
         {
           "id": "b94570",
           "name": "12 Months",
-          "price": "$60",
+          "price": "$25",
           "image": "AgACAgUAAxkBAAIJLmofVQ0AAVYjj3mgHQ_yqEAsLrl_NQACVxBrG6HQAVUAAa9DxDgewBsBAAMCAAN5AAM7BA",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5900192223160438756"
+      "emoji_id": "5900192223160438756",
+      "success_video": "CgACAgUAAxkBAAI2E2rjBvJkjZXQtSyLlvfrwBxiQ9ZvAAKMIgACCgMYV47C2hVaiMq1PQQ",
+      "success_video_type": "animation"
     },
-    "24e1c5ed": {
+    "f8114891": {
       "category": "software",
-      "name": "Creative Cloud",
-      "description": "Unlock industry-leading creativity with Adobe Creative Cloud, featuring professional tools for design, video, photography, and more — fully backed by warranty.",
-      "image": "AgACAgUAAxkBAAIKvWogC8NNXmCeQP_gfoONbhA4_6frAALWD2sb_HcAAVVvG-allXLfpwEAAwIAA3kAAzsE",
+      "name": "Linkedin",
+      "description": "Perfect for professionals looking to grow their network and career opportunities",
+      "image": "AgACAgUAAxkBAAIbXmqEBr6aGaf_RDZwHrYc8s6XhfXnAAJREmsb3b4hVDEoW3ZULAc0AQADAgADeAADPQQ",
       "plans": [
         {
-          "id": "fea44b",
-          "name": "4 Months",
-          "price": "$55",
-          "image": "AgACAgUAAxkBAAIKx2ogDI_373ntgoJnrAzrWiGI4p8MAALYD2sb_HcAAVWE_tpAz4lzyAEAAwIAA3kAAzsE",
-          "stock": -1,
-          "paused": false
-        },
-        {
-          "id": "f08804",
-          "name": "12 Months",
-          "price": "$100",
-          "image": "AgACAgUAAxkBAAIJLmofVQ0AAVYjj3mgHQ_yqEAsLrl_NQACVxBrG6HQAVUAAa9DxDgewBsBAAMCAAN5AAM7BA",
+          "id": "5dfa1e",
+          "name": "3 Months",
+          "price": "$45",
+          "image": "AgACAgUAAxkBAAIbaWqEBvDnE23L2zNVOKZObt5G8qdLAAJTEmsb3b4hVEcLd1VTdB90AQADAgADeQADPQQ",
           "stock": -1,
           "paused": false
         }
       ],
-      "stock": -1,
+      "stock": 0,
       "paused": false,
-      "emoji_id": "5879697188979740680"
+      "emoji_id": "5882148571628704558",
+      "success_video": "CgACAgUAAxkBAAI2DWrjBm_dOX1T3FMjW9xp7KfWu2H0AAKJIgACCgMYV5oOYZmQpGepPQQ",
+      "success_video_type": "animation"
     },
     "3af4a741": {
       "category": "vpn",
@@ -204,7 +226,8 @@
           "price": "$15",
           "image": "AgACAgUAAxkBAAIJTWofVw88VvOkmODvZEGtiOnWVrBJAAJaEGsbodABVfwiiNztZxgJAQADAgADeQADOwQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 3
         },
         {
           "id": "b278fc",
@@ -212,12 +235,15 @@
           "price": "$60",
           "image": "AgACAgUAAxkBAAItg2rIS50ESCOkYCjGEa25VowY0Db8AAKREGsbmCFAVpkMMQUc-XneAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5879826927056850883"
+      "emoji_id": "5879826927056850883",
+      "success_video": "CgACAgUAAxkBAAI2BGrjBh4DKb5VyKOvwkJsf4PvGlxnAAKGIgACCgMYV_5EHDzIFDTzPQQ",
+      "success_video_type": "animation"
     },
     "4235a775": {
       "category": "smm",
@@ -240,7 +266,7 @@
     },
     "cd26311c": {
       "category": "ai",
-      "name": "ChatGPT",
+      "name": "ChatGPT Plus",
       "description": "ChatGPT Plus gives you faster responses, priority access during peak times, and access to advanced AI models for better, more accurate answers.",
       "image": "AgACAgUAAxkBAAIRJ2o3pM0mBw9IisKgiMsCS7VeVJxNAAIjE2sb8-7AVeq3fqHoJfj6AQADAgADeQADPAQ",
       "plans": [
@@ -249,13 +275,16 @@
           "name": "1 Month",
           "price": "$15",
           "image": "AgACAgUAAxkBAAIRMWo3pVowo45bvCz1kRzNUBB1f6kAAyYTaxvz7sBV696gib89O7MBAAMCAAN5AAM8BA",
-          "stock": -1,
-          "paused": false
+          "stock": 1,
+          "paused": false,
+          "warranty": 1
         }
       ],
-      "stock": -1,
+      "stock": 0,
       "paused": false,
-      "emoji_id": "5877651964208091297"
+      "emoji_id": "5877651964208091297",
+      "success_video": "CgACAgUAAxkBAAI2IGrjB75k6LSEyTC34H3RoQETVlBmAAKQIgACCgMYVx0eDBLPoGOTPQQ",
+      "success_video_type": "animation"
     },
     "5dbabd41": {
       "category": "ai",
@@ -266,15 +295,16 @@
         {
           "id": "d03dfd",
           "name": "$100 API",
-          "price": "$25",
+          "price": "$35",
           "image": "AgACAgUAAxkBAAIwqWrYEmJrLLTFZ7EgnFPsvGKAnZOLAALNFWsbbnDBVpPlVR8MxtikAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 0
         },
         {
           "id": "6f92e9",
           "name": "$500 API",
-          "price": "$70",
+          "price": "$90",
           "image": "AgACAgUAAxkBAAIwr2rYEnVuRP4MwKS-OLXrwEOiqQmIAALOFWsbbnDBVi2ycVMtqbAdAQADAgADeQADPQQ",
           "stock": -1,
           "paused": false
@@ -296,7 +326,8 @@
           "price": "$45",
           "image": "AgACAgUAAxkBAAIqCmq5lmmleqylKQ-bCMSxbLmP39ihAAKVEmsbvanRVfJVOBgBygwJAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
@@ -304,8 +335,8 @@
       "emoji_id": "6298811268933367054"
     },
     "dd5383bb": {
-      "category": "ott",
-      "name": "Spotify",
+      "category": "music",
+      "name": "Spotify - Standard Plan",
       "description": "Upgrade to Spotify Premium with full warranty for uninterrupted, ad-free music, offline downloads, and seamless listening across all your devices — and more.",
       "image": "AgACAgUAAxkBAAIJQ2ofVnidoDBThrcXtY31TzxSN0WSAAJZEGsbodABVYt9mKeSarjcAQADAgADeQADOwQ",
       "plans": [
@@ -315,7 +346,8 @@
           "price": "$15",
           "image": "AgACAgUAAxkBAAIJTWofVw88VvOkmODvZEGtiOnWVrBJAAJaEGsbodABVfwiiNztZxgJAQADAgADeQADOwQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 3
         },
         {
           "id": "e5a895",
@@ -323,7 +355,8 @@
           "price": "$25",
           "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 6
         },
         {
           "id": "67f7ae",
@@ -331,31 +364,16 @@
           "price": "$50",
           "image": "AgACAgUAAxkBAAIHcWofNM283dWb6Oa0oL2m6HJGetJHAAI-EGsbodABVaQ8Yc9tWzGQAQADAgADeQADOwQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5868508172108435919"
-    },
-    "f8114891": {
-      "category": "software",
-      "name": "Linkedin",
-      "description": "Perfect for professionals looking to grow their network and career opportunities",
-      "image": "AgACAgUAAxkBAAIbXmqEBr6aGaf_RDZwHrYc8s6XhfXnAAJREmsb3b4hVDEoW3ZULAc0AQADAgADeAADPQQ",
-      "plans": [
-        {
-          "id": "5dfa1e",
-          "name": "3 Months",
-          "price": "$45",
-          "image": "AgACAgUAAxkBAAIbaWqEBvDnE23L2zNVOKZObt5G8qdLAAJTEmsb3b4hVEcLd1VTdB90AQADAgADeQADPQQ",
-          "stock": -1,
-          "paused": false
-        }
-      ],
-      "stock": 0,
-      "paused": false,
-      "emoji_id": "5882148571628704558"
+      "emoji_id": "5868508172108435919",
+      "button_name": "Spotify",
+      "success_video": "CgACAgUAAxkBAAI1rWri43j6y6MZMjLi855NemJOPeCkAAIzIgACCgMYV02UB7xY1BZ8PQQ",
+      "success_video_type": "animation"
     },
     "8a0baf8a": {
       "category": "software",
@@ -366,15 +384,19 @@
         {
           "id": "490e6f",
           "name": "12 Months",
-          "price": "$125",
+          "price": "$80",
           "image": "AgACAgUAAxkBAAIb-GqGfpziVld3bKPsFQlQnmlpIv4DAAKqEmsbivc4VD64T0ISjUuEAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "6066879122234153653"
+      "emoji_id": "6066879122234153653",
+      "warranty": 12,
+      "success_video": "CgACAgUAAxkBAAI2EWrjBsvFymqiAUn6gvRgZYK_-bHMAAKLIgACCgMYV7c39mTVH5-UPQQ",
+      "success_video_type": "animation"
     },
     "1c62ada2": {
       "category": "software",
@@ -388,31 +410,15 @@
           "price": "$45",
           "image": "AgACAgUAAxkBAAIigWqq7N27xRsGEGtJlizUBQmBgJ3uAALAFmsbiEtYVVqoxP3eHX3FAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 12
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5796371348808799072"
-    },
-    "9431ba7c": {
-      "category": "ott",
-      "name": "Apple Music",
-      "description": "Enjoy Apple Music with full warranty, featuring ad-free listening, offline downloads, seamless playback across your devices, and access to millions of songs — all in one place",
-      "image": "AgACAgUAAxkBAAInY2qw22dQ-n9a7gaABXynBurjHGNbAAJMF2sbUPKJVbquOwgoGvipAQADAgADeQADPQQ",
-      "plans": [
-        {
-          "id": "c53b85",
-          "name": "6 Months",
-          "price": "$30",
-          "image": "AgACAgUAAxkBAAIne2qw3OpRwOGxuI1yWNmO3HtsSyD_AAJRF2sbUPKJVXFQyTATGvEtAQADAgADeQADPQQ",
-          "stock": -1,
-          "paused": false
-        }
-      ],
-      "stock": -1,
-      "paused": false,
-      "emoji_id": "5872815276982014467"
+      "emoji_id": "5796371348808799072",
+      "success_video": "CgACAgUAAxkBAAI2D2rjBq8N7ZPpN153pn8djPZ3G6ibAAKKIgACCgMYV08i3CCWpcnyPQQ",
+      "success_video_type": "animation"
     },
     "eb27abe6": {
       "category": "software",
@@ -426,12 +432,56 @@
           "price": "$55",
           "image": "AgACAgUAAxkBAAIqCmq5lmmleqylKQ-bCMSxbLmP39ihAAKVEmsbvanRVfJVOBgBygwJAQADAgADeQADPQQ",
           "stock": -1,
+          "paused": false,
+          "warranty": 12
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5877739680325179188",
+      "success_video": "CgACAgUAAxkBAAI2F2rjBzjK4pwMneD9oYgZAznDTvRdAAKOIgACCgMYV7uCkb9TpFUbPQQ",
+      "success_video_type": "animation"
+    },
+    "9431ba7c": {
+      "category": "music",
+      "name": "Apple Music",
+      "description": "Enjoy Apple Music with full warranty, featuring ad-free listening, offline downloads, seamless playback across your devices, and access to millions of songs — all in one place",
+      "image": "AgACAgUAAxkBAAInY2qw22dQ-n9a7gaABXynBurjHGNbAAJMF2sbUPKJVbquOwgoGvipAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "c53b85",
+          "name": "6 Months",
+          "price": "$30",
+          "image": "AgACAgUAAxkBAAIne2qw3OpRwOGxuI1yWNmO3HtsSyD_AAJRF2sbUPKJVXFQyTATGvEtAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false,
+          "warranty": 6
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5872815276982014467",
+      "success_video": "CgACAgUAAxkBAAI13Wri8_b3YfAnQ38qODy_ltPGsHkbAAJlIgACCgMYV-oglp9rwHTaPQQ",
+      "success_video_type": "animation"
+    },
+    "a63eed2b": {
+      "category": "software",
+      "name": "Lovable Pro",
+      "description": "Build apps faster with unlimited projects, higher usage limits, custom domains, GitHub integration, team collaboration, and powerful AI-powered development tools.",
+      "image": "AgACAgUAAxkBAAI5gWrsrDKpI4aGWu0PrdSM-KadkGneAAJhFmsbtOhgV-1bDt5sfzZ6AQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "884c5d",
+          "name": "12 Months",
+          "price": "$120",
+          "image": "AgACAgUAAxkBAAI5jGrsrF87ouCHq1cWr5p72s5OpKy4AAJKHmsb8m9gV4OQwpy5iu9aAQADAgADeQADPQQ",
+          "stock": -1,
           "paused": false
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5877739680325179188"
+      "emoji_id": "6104729848675050039"
     },
     "d6201729": {
       "category": "ai",
@@ -445,12 +495,15 @@
           "price": "$15",
           "image": "AgACAgUAAxkBAAIxMGrZ0qAZL10GxNxa5Od4wF7BebRkAAL6FWsbbnDRVqTNwD75LvOrAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 1
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "6255899967211184618"
+      "emoji_id": "6255899967211184618",
+      "success_video": "CgACAgUAAxkBAAI2HmrjB4eAZ88oxSnRAAH1M_pHYomGIQACjyIAAgoDGFea1Z7sTgOc8z0E",
+      "success_video_type": "animation"
     },
     "8d4ba6fa": {
       "category": "ai",
@@ -464,7 +517,8 @@
           "price": "$15",
           "image": "AgACAgUAAxkBAAIxz2rbd-Bg0JaOMDLprF5zoG99BHaxAAIOEGsbT0rgVkb6bc909DEjAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 1
         },
         {
           "id": "988da6",
@@ -472,7 +526,8 @@
           "price": "$35",
           "image": "AgACAgUAAxkBAAIsCGrAT4Tb470gkiFe6z97ZeGc1gN1AAJrEWsbrNoJVvZSrb5x27PeAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 3
         }
       ],
       "stock": -1,
@@ -480,8 +535,8 @@
       "emoji_id": "6219689196722854904"
     },
     "8f3bade4": {
-      "category": "ott",
-      "name": "Deezer",
+      "category": "music",
+      "name": "Deezer - Premium Plan",
       "description": "Deezer Premium gives you an ad-free listening experience, offline music downloads, high-quality audio, unlimited skips, and on-demand playback of your favorite songs and playlists",
       "image": "AgACAgUAAxkBAAIu0WrVuLrlvnnzJAawN3uH-dHwtLs0AALpGWsblpupVuFAqX15jzVfAQADAgADeQADPQQ",
       "plans": [
@@ -491,7 +546,8 @@
           "price": "$7",
           "image": "AgACAgUAAxkBAAIu22rVuOFLgDMAAf7Dyj0vVk9h7VyrXwAC7BlrG5abqVaI9lq8YAvrtQEAAwIAA3kAAz0E",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 1
         },
         {
           "id": "e983b2",
@@ -499,12 +555,16 @@
           "price": "$20",
           "image": "AgACAgUAAxkBAAIu8WrVx3GZvS79ivgZHCLJJWpuakAzAAJeGmsblpupVgr6nFFEhdFHAQADAgADeQADPQQ",
           "stock": -1,
-          "paused": false
+          "paused": false,
+          "warranty": 3
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5899774597720445767"
+      "emoji_id": "5899774597720445767",
+      "button_name": "Deezer",
+      "success_video": "CgACAgUAAxkBAAI16Wri9MZL6XPHbM6SZ5iqyyBASXApAAJoIgACCgMYV1_bMcgEDmdYPQQ",
+      "success_video_type": "animation"
     },
     "5562656c": {
       "category": "ai",
@@ -531,7 +591,9 @@
       ],
       "stock": 0,
       "paused": false,
-      "emoji_id": "5386400897746100321"
+      "emoji_id": "5386400897746100321",
+      "success_video": "CgACAgUAAxkBAAI2ImrjB-2B8h45lRYBQTXFC9royWnoAAKRIgACCgMYV6g8PH7nJT4TPQQ",
+      "success_video_type": "animation"
     },
     "ab05ee54": {
       "category": "ai",
@@ -551,6 +613,98 @@
       "stock": 0,
       "paused": false,
       "emoji_id": "6105050957609968229"
+    },
+    "24e1c5ed": {
+      "category": "software",
+      "name": "Creative Cloud Pro",
+      "description": "Unlock industry-leading creativity with Adobe Creative Cloud, featuring professional tools for design, video, photography, and more — fully backed by warranty.",
+      "image": "AgACAgUAAxkBAAI9Jmr959CLE0x4a5gI9DNjaPX_LwtLAAJ5Emsb_VfwV5CENTy1BsGbAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "fea44b",
+          "name": "4 Months",
+          "price": "$55",
+          "image": "AgACAgUAAxkBAAIKx2ogDI_373ntgoJnrAzrWiGI4p8MAALYD2sb_HcAAVWE_tpAz4lzyAEAAwIAA3kAAzsE",
+          "stock": -1,
+          "paused": false,
+          "warranty": 4
+        },
+        {
+          "id": "f08804",
+          "name": "12 Months",
+          "price": "$145",
+          "image": "AgACAgUAAxkBAAIJLmofVQ0AAVYjj3mgHQ_yqEAsLrl_NQACVxBrG6HQAVUAAa9DxDgewBsBAAMCAAN5AAM7BA",
+          "stock": -1,
+          "paused": false,
+          "warranty": 12
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5879697188979740680",
+      "success_video": "CgACAgUAAxkBAAI2FWrjBxbaifqVYfF84qSLlHS17j75AAKNIgACCgMYV0Avp_fdb9QvPQQ",
+      "success_video_type": "animation"
+    },
+    "192e54c5": {
+      "category": "vpn",
+      "name": "HMA VPN",
+      "description": "Enjoy premium privacy, secure encrypted browsing, global server access and seamless connectivity.\n\nFull Warranty Included\nAvailable for Android & PC Only",
+      "image": "AgACAgUAAxkBAAI8p2r9owndEf7PKy4PHJ1UkN6SciZbAAKYFmsb_VfoV4TMLbU7cZinAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "b27017",
+          "name": "1 Month",
+          "price": "$7",
+          "image": "AgACAgUAAxkBAAI8smr9pBhjXfyXXo1-SoiWJQ34hYLXAAKcFmsb_VfoV2mCQpSFlScAAQEAAwIAA3kAAz0E",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5879636621350933766"
+    },
+    "15946f7c": {
+      "category": "vpn",
+      "name": "IPVanish VPN",
+      "description": "Enjoy premium online privacy, secure encrypted browsing, high-speed global server access and reliable connectivity with IPVanish VPN",
+      "image": "AgACAgUAAxkBAAI8x2r9pySCbcSqSlR_LF9bBWp3soDPAAKxFmsb_VfoVyqXkOHKxPQEAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "227c09",
+          "name": "1 Month",
+          "price": "$7",
+          "image": "AgACAgUAAxkBAAI80Wr9p5WVfe_WvVmZ7XZx8PM_YVCbAAKyFmsb_VfoV1EbJ7wLvYIZAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "a87482",
+          "name": "3 Month",
+          "price": "$20",
+          "image": "AgACAgUAAxkBAAI82Wr9p9Ofk02erUORJFjnv104CEp6AAKzFmsb_VfoV8DGQUZeKCNCAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "1ea0e7",
+          "name": "6 Month",
+          "price": "$35",
+          "image": "AgACAgUAAxkBAAI832r9p_Y12BSTqAb8kXKQU6DoD0shAAK1Fmsb_VfoV7T0fc9bzIGpAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        },
+        {
+          "id": "57bdb9",
+          "name": "12 Months",
+          "price": "$60",
+          "image": "AgACAgUAAxkBAAI85mr9qDgistHr79AeC71lQwbJ0AU3AAK2Fmsb_VfoV7MDDlotYH63AQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false
     }
   }
 }

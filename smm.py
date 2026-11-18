@@ -511,7 +511,7 @@ def _root_screen_rows(user_id):
     rows.append([{"text": "Back", "callback_data": "smx", "emoji_id": _action_emoji("back_button")}])
     title = html.escape(cfg.get("title") or "Social Media Services")
     desc = html.escape(cfg.get("desc") or "Choose a platform:")
-    text = "<b>" + title + "</b>" + NL + NL + desc
+    text = "<b>" + title + "</b>" + NL + NL + "<b>" + desc + "</b>"
     return text, rows, cfg.get("image")
 
 def _platform_screen_rows(pid, user_id):
@@ -538,7 +538,7 @@ def _platform_screen_rows(pid, user_id):
         rows.append([{"text": "🖼 Set Page Image", "callback_data": "smpi:" + pid, "emoji_id": None}])
     rows.append([{"text": "Back", "callback_data": "smr", "emoji_id": _action_emoji("back_button")}])
     intro = p.get("intro") or "Choose a service:"
-    text = "<b>" + html.escape(p["name"]) + "</b>" + NL + NL + html.escape(intro)
+    text = "<b>" + html.escape(p["name"]) + "</b>" + NL + NL + "<b>" + html.escape(intro) + "</b>"
     return text, rows, p.get("image")
 
 def _qty_screen_rows(pid, sid, s):
@@ -766,6 +766,12 @@ async def _on_callback(update, context):
         if not s:
             await query.answer("Not found", show_alert=True)
             raise ApplicationHandlerStop
+        try:
+            import analytics
+            analytics.track(query.from_user.id, "svc", pid=pid, product=s.get("title"),
+                            price=s.get("price_text") or s.get("price_per_1k"))
+        except Exception:
+            pass
         caption, rows, photo = _qty_screen_rows(pid, sid, s)
         chat_id = query.message.chat_id
         msg_id = query.message.message_id

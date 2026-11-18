@@ -27,10 +27,38 @@ import cart
 import payments
 import store
 import orders
+import myorders
+import analytics
 
-# --- Your settings ---
-BOT_TOKEN = "8712977638:AAH5Jd61LPXFNbdZn0Sp39RKUgG6kV18Qlg"
-ADMIN_ID = 6684244590
+# --- Settings: kept in a .env file ON THE SERVER, never in this file, so that
+# uploading a new bot.py can never overwrite or leak them. ---
+_ENV_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _read_env_file():
+    vals = {}
+    try:
+        with open(os.path.join(_ENV_DIR, ".env"), "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                vals[k.strip()] = v.strip().strip('"').strip("'")
+    except FileNotFoundError:
+        pass
+    return vals
+
+_ENV = _read_env_file()
+
+def _setting(name):
+    value = os.environ.get(name) or _ENV.get(name)
+    if not value:
+        raise SystemExit("Missing " + name + ". Create " + os.path.join(_ENV_DIR, ".env")
+                         + " containing BOT_TOKEN=... and ADMIN_ID=...")
+    return value
+
+BOT_TOKEN = _setting("BOT_TOKEN")
+ADMIN_ID = int(_setting("ADMIN_ID"))
 # ---------------------
 
 PRODUCT_CATEGORIES = {"ott", "vpn"}
@@ -45,6 +73,7 @@ TG_FILE = os.path.join(BASE_DIR, "tgpremium.json")
 ACTION_EMOJI_FILE = os.path.join(BASE_DIR, "action_emojis.json")
 
 VIEW_CART_ID = "viewcart"
+MY_ORDERS_ID = "myorders"
 
 DEFAULT_BUTTONS = [
     {"id": "ott",        "text": "OTT Premium",          "size": "half", "emoji_id": None},
@@ -81,6 +110,13 @@ DEFAULT_ACTION_EMOJIS = {
     "increment": None,
     "decrement": None,
     "use_wallet": None,
+    "use_wallet_balance": None,
+    "use_crypto": None,
+    "cancel": None,
+    "notify_me": None,
+    "checkout": None,
+    "clear_cart": None,
+    "download_invoice": None,
     "deposit": None,
     "checkout_more": None,
     "view_cart": None,
@@ -242,6 +278,8 @@ def button_name(button_id):
 def menu_callback_for(button):
     if button["id"] == VIEW_CART_ID:
         return "cart:open"
+    if button["id"] == MY_ORDERS_ID:
+        return "mo:list"
     return "open:" + button["id"]
 
 def ensure_viewcart_button():
@@ -253,6 +291,21 @@ def ensure_viewcart_button():
         buttons.append({"id": VIEW_CART_ID, "text": "View Cart", "size": "full", "emoji_id": None})
         save_buttons(buttons)
     settings["viewcart_added"] = True
+    save_settings(settings)
+
+def ensure_myorders_button():
+    """Adds the 'My Orders' main-menu button once (before Support if present).
+    Set its animated emoji from EDIT -> Set Button Emoji."""
+    settings = load_settings()
+    if settings.get("myorders_added"):
+        return
+    buttons = load_buttons()
+    if not any(b.get("id") == MY_ORDERS_ID for b in buttons):
+        new_btn = {"id": MY_ORDERS_ID, "text": "My Orders", "size": "full", "emoji_id": None}
+        idx = next((i for i, b in enumerate(buttons) if b.get("id") == "support"), len(buttons))
+        buttons.insert(idx, new_btn)
+        save_buttons(buttons)
+    settings["myorders_added"] = True
     save_settings(settings)
 
 def load_products():
@@ -653,8 +706,19 @@ Bot Settings:
 /maintenance - Put bot in maintenance mode
 
 Order Management:
+/aall [days] - All products: who clicked, date, time, what they did (kept 30 days)
+/aspotify, /aytpremium ... - Same, for one product (name without spaces; first letters are enough)
+/funnel [days] - Per product/plan: clicks, payment page visits, paid, sell rate, names
+/paypage [days] - Everyone who reached the payment page and whether they paid
+/clicks [days] - Full click log as a CSV file
+/clicks @username [days] - One customer's timeline
+/anotify - Turn the "new payment page opened" alert on/off
+/trackme - Turn tracking of your own clicks on/off (testing)
 /orders - Show all orders statistics
 /stats @username - Show order statistics of a specific user
+/addorder - Add a past order to a customer's "My Orders" (guided)
+/userorders @username|id - List a customer's saved My Orders
+/delorder ORDER_ID - Remove an order from "My Orders"
 
 Direct Message:
 /dm @username message - Send a message to one user (formatting preserved exactly)
@@ -1080,6 +1144,10 @@ async def cmd_stock_status(update, context):
         await update.message.reply_text(status_text)
 
 # ========== customer screens ==========
+def product_button_name(product):
+    """Name shown on the category-list BUTTON. Falls back to the product name."""
+    return (product.get("button_name") or "").strip() or product["name"]
+
 def category_screen(cat_id, user_id):
     name = button_name(cat_id)
     # All categories are valid — no restriction
@@ -1087,9 +1155,9 @@ def category_screen(cat_id, user_id):
     rows = []
     i = 0
     while i < len(prods):
-        row = [{"text": prods[i][1]["name"], "callback_data": "prod:" + prods[i][0], "emoji_id": prods[i][1].get("emoji_id")}]
+        row = [{"text": product_button_name(prods[i][1]), "callback_data": "prod:" + prods[i][0], "emoji_id": prods[i][1].get("emoji_id")}]
         if i + 1 < len(prods):
-            row.append({"text": prods[i + 1][1]["name"], "callback_data": "prod:" + prods[i + 1][0], "emoji_id": prods[i + 1][1].get("emoji_id")})
+            row.append({"text": product_button_name(prods[i + 1][1]), "callback_data": "prod:" + prods[i + 1][0], "emoji_id": prods[i + 1][1].get("emoji_id")})
         rows.append(row)
         i += 2
     if user_id == ADMIN_ID:
@@ -1101,7 +1169,8 @@ def category_screen(cat_id, user_id):
     rows.append([{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}])
     cat_image = get_category_image(cat_id)
     if prods:
-        text = "<b>" + html.escape(name) + "</b>" + NL + html.escape(get_category_intro(cat_id))
+        # Title, one blank line, then the intro line in bold (same for every category).
+        text = "<b>" + html.escape(name) + "</b>" + NL + NL + "<b>" + html.escape(get_category_intro(cat_id)) + "</b>"
     elif user_id == ADMIN_ID:
         text = "<b>" + html.escape(name) + "</b>" + NL + "No products yet. Tap 'Add Product' to create one."
     else:
@@ -1124,7 +1193,7 @@ def product_screen(pid, user_id=None):
             caption += "<b>This product is not in stock.</b>" + NL
             caption += "We will notify you instantly when it comes back in stock."
             rows = [
-                [{"text": "Notify Me When Available", "callback_data": "oos:" + pid, "emoji_id": None}],
+                [{"text": "Notify Me When Available", "callback_data": "oos:" + pid, "emoji_id": get_action_emoji("notify_me")}],
                 [{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}],
             ]
         return caption, rows, None
@@ -1146,6 +1215,10 @@ def product_screen(pid, user_id=None):
         rows.append([
             {"text": "Edit Product", "callback_data": "pm:" + pid, "emoji_id": None},
             {"text": img_status, "callback_data": "pei:" + pid, "emoji_id": None},
+        ])
+        rows.append([
+            {"text": "Edit Product Name", "callback_data": "pen:" + pid, "emoji_id": None},
+            {"text": "Edit Button Name", "callback_data": "pbn:" + pid, "emoji_id": None},
         ])
     rows.append([{"text": "Back", "callback_data": "close", "emoji_id": get_action_emoji("back_button")}])
     return caption, rows, product.get("image")
@@ -1172,7 +1245,7 @@ def plan_screen(pid, plan_id, qty=1):
             caption += "<b>This plan is not in stock.</b>" + NL
             caption += "We will notify you instantly when it comes back in stock."
             rows = [
-                [{"text": "Notify Me When Available", "callback_data": "oos:" + pid + ":" + plan_id, "emoji_id": None}],
+                [{"text": "Notify Me When Available", "callback_data": "oos:" + pid + ":" + plan_id, "emoji_id": get_action_emoji("notify_me")}],
                 [{"text": "Back", "callback_data": "prod:" + pid, "emoji_id": get_action_emoji("back_button")}],
             ]
         return caption, rows, None
@@ -1423,17 +1496,21 @@ def product_manage_menu(pid):
     status_text = "PAUSED" if paused else "ACTIVE"
     text = (
         "EDITING: " + product["name"] + NL + NL
+        + "Button name: " + product_button_name(product) + (" (same as product name)" if not product.get("button_name") else "") + NL
         + "Description: " + (product.get("description") or "(none)") + NL
         + "Image: " + img + NL
+        + "Payment video: " + ("Yes" if product.get("success_video") else "No") + NL
         + "Product Stock: " + stock_text + NL
         + "Status: " + status_text + NL
         + "Plans: " + str(len(product.get("plans", []))) + NL + NL
         + "Note: Individual plans can have their own stock settings"
     )
     kb = [
-        [InlineKeyboardButton("Edit Name", callback_data="pen:" + pid)],
+        [InlineKeyboardButton("Edit Product Name", callback_data="pen:" + pid)],
+        [InlineKeyboardButton("Edit Button Name", callback_data="pbn:" + pid)],
         [InlineKeyboardButton("Edit Description", callback_data="ped:" + pid)],
         [InlineKeyboardButton("Change Image", callback_data="pei:" + pid)],
+        [InlineKeyboardButton("Set Payment Video", callback_data="pvid:" + pid)],
         [InlineKeyboardButton("Set Product Stock", callback_data="prod_stock:" + pid)],
         [InlineKeyboardButton("Pause/Resume Product", callback_data="prod_pause:" + pid)],
         [InlineKeyboardButton("Manage Plans", callback_data="mpl:" + pid)],
@@ -1482,6 +1559,7 @@ def plan_manage_menu(pid, plan_id):
         "EDITING PLAN" + NL + NL
         + "Plan: " + plan["name"] + NL
         + "Price: " + plan["price"] + NL
+        + "Warranty: " + myorders.warranty_setting_text(plan) + NL
         + "Image: " + img + NL
         + "Plan Stock: " + stock_text + NL
         + "Status: " + status_text + NL + NL
@@ -1491,6 +1569,7 @@ def plan_manage_menu(pid, plan_id):
     kb = [
         [InlineKeyboardButton("Edit Name", callback_data="plen:" + pid + ":" + plan_id)],
         [InlineKeyboardButton("Edit Price", callback_data="plep:" + pid + ":" + plan_id)],
+        [InlineKeyboardButton("Set Warranty", callback_data="plwar:" + pid + ":" + plan_id)],
         [InlineKeyboardButton("Change Image", callback_data="plei:" + pid + ":" + plan_id)],
         [InlineKeyboardButton("Set Plan Stock", callback_data="plan_stock:" + pid + ":" + plan_id)],
         [InlineKeyboardButton("Pause/Resume Plan", callback_data="plan_pause:" + pid + ":" + plan_id)],
@@ -1626,6 +1705,8 @@ async def on_callback(update, context):
 
     if data.startswith("prod:"):
         pid = data[5:]
+        _p = get_product(pid)
+        analytics.track(user_id, "view", pid=pid, product=(_p or {}).get("name"))
         screen = product_screen(pid, user_id)
         if not screen:
             await query.answer("Product not found", show_alert=True)
@@ -1637,6 +1718,14 @@ async def on_callback(update, context):
 
     if data.startswith("plan:"):
         pid, plan_id = data[5:].split(":", 1)
+        try:
+            _p = get_product(pid)
+            _pl = find_plan(_p, plan_id) if _p else None
+            if _pl:
+                analytics.track(user_id, "plan", pid=pid, plan_id=plan_id, product=_p["name"],
+                                plan=_pl["name"], price=_pl.get("price"))
+        except Exception:
+            pass
         screen = plan_screen(pid, plan_id, 1)
         if not screen:
             await query.answer("Plan not found", show_alert=True)
@@ -1898,7 +1987,37 @@ async def on_callback(update, context):
         context.user_data.clear()
         context.user_data["state"] = "edit_prod_name"
         context.user_data["target_pid"] = pid
-        await safe_edit(query, context, "Send the new PRODUCT NAME:")
+        await safe_edit(query, context, "Send the new PRODUCT NAME (shown as the title on the product page).")
+        return
+
+    if data.startswith("plwar:"):
+        pid, plan_id = data[6:].split(":", 1)
+        context.user_data.clear()
+        context.user_data["state"] = "edit_plan_warranty"
+        context.user_data["target_pid"] = pid
+        context.user_data["target_plan"] = plan_id
+        p = get_product(pid)
+        pl = find_plan(p, plan_id) if p else None
+        await safe_edit(query, context,
+            "WARRANTY for " + ((p["name"] + " - " + pl["name"]) if (p and pl) else "?") + NL
+            + "Current: " + myorders.warranty_setting_text(pl, p) + NL + NL
+            + "Send the warranty in MONTHS (example: 6)" + NL
+            + "Send  plan  to make the warranty equal to the plan length" + NL
+            + "Send 0 for NO warranty." + NL + NL
+            + "Orders already placed keep the warranty they were sold with.")
+        return
+
+    if data.startswith("pbn:"):
+        pid = data[4:]
+        context.user_data.clear()
+        context.user_data["state"] = "edit_prod_btnname"
+        context.user_data["target_pid"] = pid
+        p = get_product(pid)
+        cur = product_button_name(p) if p else "?"
+        await safe_edit(query, context,
+            "Send the new BUTTON NAME (shown on the category list button only)." + NL
+            + "Current: " + cur + NL
+            + "Send 0 to use the product name again.")
         return
 
     if data.startswith("ped:"):
@@ -1915,6 +2034,19 @@ async def on_callback(update, context):
         context.user_data["state"] = "edit_prod_image"
         context.user_data["target_pid"] = pid
         await safe_edit(query, context, "Send the new PRODUCT IMAGE. (send 0 to remove)")
+        return
+
+    if data.startswith("pvid:"):
+        pid = data[5:]
+        context.user_data.clear()
+        context.user_data["state"] = "edit_prod_video"
+        context.user_data["target_pid"] = pid
+        p = get_product(pid)
+        await safe_edit(query, context,
+            "PAYMENT VIDEO for " + (p["name"] if p else "?") + NL
+            + "Current: " + ("set" if p and p.get("success_video") else "none") + NL + NL
+            + "Send the VIDEO (or GIF) customers see in the \"Payment Received Successfully\" message when they buy this product." + NL
+            + "Send 0 to remove it.")
         return
 
     if data.startswith("pdelok:"):
@@ -2194,8 +2326,8 @@ async def on_callback(update, context):
     if data == "e_setactionemoji":
         action_emojis = load_action_emojis()
         text = "SET ACTION BUTTON EMOJIS\n\n"
-        for key in action_emojis:
-            status = "✅" if action_emojis[key] else "❌"
+        for key, val in {**DEFAULT_ACTION_EMOJIS, **action_emojis}.items():
+            status = "✅" if val else "❌"
             text += f"{status} {key.replace('_', ' ').title()}\n"
         kb = [
             [InlineKeyboardButton("Buy Now", callback_data="setaction:buy_now")],
@@ -2204,6 +2336,13 @@ async def on_callback(update, context):
             [InlineKeyboardButton("+ Increment", callback_data="setaction:increment")],
             [InlineKeyboardButton("- Decrement", callback_data="setaction:decrement")],
             [InlineKeyboardButton("Use Wallet", callback_data="setaction:use_wallet")],
+            [InlineKeyboardButton("Use Wallet Balance", callback_data="setaction:use_wallet_balance")],
+            [InlineKeyboardButton("Use Crypto", callback_data="setaction:use_crypto")],
+            [InlineKeyboardButton("Cancel", callback_data="setaction:cancel")],
+            [InlineKeyboardButton("Notify Me When Available", callback_data="setaction:notify_me")],
+            [InlineKeyboardButton("Checkout (cart)", callback_data="setaction:checkout")],
+            [InlineKeyboardButton("Clear Cart", callback_data="setaction:clear_cart")],
+            [InlineKeyboardButton("Download Invoice", callback_data="setaction:download_invoice")],
             [InlineKeyboardButton("Deposit", callback_data="setaction:deposit")],
             [InlineKeyboardButton("Checkout More Products", callback_data="setaction:checkout_more")],
             [InlineKeyboardButton("View Cart", callback_data="setaction:view_cart")],
@@ -2900,6 +3039,55 @@ async def on_text(update, context):
         await _done_back(update, "Name updated.", "pm:" + pid)
         return
 
+    if state == "edit_plan_warranty":
+        pid = context.user_data.get("target_pid")
+        plan_id = context.user_data.get("target_plan")
+        t = text.strip().lower()
+        if t == "plan":
+            value = "plan"
+        elif t.isdigit():
+            value = int(t)
+        else:
+            await update.message.reply_text("Send a number of months (like 6), the word plan, or 0 for no warranty.")
+            return
+        d = load_products()
+        prod = d["items"].get(pid)
+        if prod:
+            for pl in prod.get("plans", []):
+                if pl["id"] == plan_id:
+                    pl["warranty"] = value          # 0 = explicitly no warranty
+            save_products(d)
+        context.user_data.clear()
+        await _done_back(update, "Warranty updated.", "plm:" + pid + ":" + plan_id)
+        return
+
+    if state == "edit_prod_video":
+        pid = context.user_data.get("target_pid")
+        if text.strip() == "0":
+            d = load_products()
+            if pid in d["items"]:
+                d["items"][pid].pop("success_video", None)
+                d["items"][pid].pop("success_video_type", None)
+                save_products(d)
+            context.user_data.clear()
+            await _done_back(update, "Payment video removed.", "pm:" + pid)
+        else:
+            await update.message.reply_text("Please send a video, or send 0 to remove it.")
+        return
+
+    if state == "edit_prod_btnname":
+        pid = context.user_data.get("target_pid")
+        d = load_products()
+        if pid in d["items"]:
+            if text == "0":
+                d["items"][pid].pop("button_name", None)
+            else:
+                d["items"][pid]["button_name"] = text
+            save_products(d)
+        context.user_data.clear()
+        await _done_back(update, "Button name updated.", "pm:" + pid)
+        return
+
     if state == "edit_prod_desc":
         pid = context.user_data.get("target_pid")
         d = load_products()
@@ -3010,6 +3198,30 @@ async def on_text(update, context):
             text_msg, kb = res
             await update.message.reply_text(text_msg, reply_markup=kb)
         return
+
+# ========== video handler (payment-success video per product) ==========
+async def on_video(update, context):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    if context.user_data.get("state") != "edit_prod_video":
+        return
+    m = update.message
+    if m.video:
+        file_id, kind = m.video.file_id, "video"
+    elif m.animation:
+        file_id, kind = m.animation.file_id, "animation"
+    elif m.document and (m.document.mime_type or "").startswith("video/"):
+        file_id, kind = m.document.file_id, "video"
+    else:
+        return
+    pid = context.user_data.get("target_pid")
+    d = load_products()
+    if pid in d["items"]:
+        d["items"][pid]["success_video"] = file_id
+        d["items"][pid]["success_video_type"] = kind
+        save_products(d)
+    context.user_data.clear()
+    await _done_back(update, "Payment video saved.", "pm:" + pid)
 
 # ========== photo handler ==========
 async def on_photo(update, context):
@@ -3183,12 +3395,15 @@ async def on_error(update, context):
     except Exception:
         pass
 
+_HEARTBEAT_TASK = None
+
 def main():
     print("Project folder:", BASE_DIR)
     s = load_settings()
     print("Welcome image set:", "yes" if s.get("welcome_image") else "no")
 
     ensure_viewcart_button()
+    ensure_myorders_button()
 
     persistence = PicklePersistence(filepath=os.path.join(BASE_DIR, "bot_persistence.pkl"), update_interval=1)
 
@@ -3209,8 +3424,33 @@ def main():
             print(f"[startup] Webhook check/delete failed: {e}")
         await payments.resume_pending_orders(application)
 
-    app = Application.builder().token(BOT_TOKEN).persistence(persistence).post_init(_post_init).build()
+        # Heartbeat: every 30s prove the event loop is alive AND Telegram is
+        # reachable by calling getMe, then touch heartbeat.txt. An external
+        # watchdog (watchdog.sh) restarts the service if this file goes stale.
+        async def _heartbeat():
+            hb_path = os.path.join(BASE_DIR, "heartbeat.txt")
+            while True:
+                try:
+                    await application.bot.get_me()
+                    with open(hb_path, "w") as f:
+                        f.write(str(int(asyncio.get_event_loop().time())))
+                except Exception as e:
+                    print(f"[heartbeat] Telegram check failed: {e}")
+                await asyncio.sleep(30)
+        global _HEARTBEAT_TASK
+        _HEARTBEAT_TASK = asyncio.create_task(_heartbeat())
+
+    # Longer network timeouts: the defaults (5s) cause "TimedOut" on slow replies
+    # such as long /users output or brief network hiccups.
+    app = (
+        Application.builder().token(BOT_TOKEN).persistence(persistence).post_init(_post_init)
+        .connect_timeout(20).read_timeout(30).write_timeout(30).pool_timeout(20)
+        .get_updates_connect_timeout(20).get_updates_read_timeout(40).get_updates_pool_timeout(20)
+        .build()
+    )
     cart.setup(app, ADMIN_ID)
+    myorders.setup(app, ADMIN_ID)
+    analytics.setup(app, ADMIN_ID)
     smm.setup(app, ADMIN_ID, BOT_TOKEN)
     payments.setup(app, ADMIN_ID, BOT_TOKEN)
     orders.register_gate(app)
@@ -3238,6 +3478,7 @@ def main():
 
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_handler(MessageHandler(filters.PHOTO, on_photo))
+    app.add_handler(MessageHandler(filters.VIDEO | filters.ANIMATION | filters.Document.VIDEO, on_video))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
 
     app.add_error_handler(on_error)
@@ -3250,7 +3491,9 @@ def main():
     # narrow it again later and callback_query taps would go dead with zero
     # errors anywhere. Passing this on every getUpdates call means it can never
     # drift from what the bot actually needs.
-    app.run_polling(allowed_updates=[])
+    # bootstrap_retries=-1: if Telegram is unreachable at startup, keep retrying
+    # instead of exiting.
+    app.run_polling(allowed_updates=[], bootstrap_retries=-1)
 
 if __name__ == "__main__":
     main()

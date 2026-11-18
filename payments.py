@@ -16,6 +16,7 @@ import os
 import json
 import time
 import html
+import uuid
 import asyncio
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -47,7 +48,7 @@ _ACTIVE_TASKS = {}   # user_id -> countdown asyncio.Task
 
 # ========================= storage =========================
 def _default_data():
-    return {"cryptos": [], "picker_text": "", "pay_image": None, "wallet_image": None}
+    return {"cryptos": [], "picker_text": "", "pay_image": None, "wallet_image": None, "wallet_choice_image": None}
 
 def load_cryptos():
     data = pe.load_cryptos()
@@ -208,6 +209,7 @@ def admin_home_panel():
     kb.append([InlineKeyboardButton("📝 Edit Page Text", callback_data="pay:pickedit")])
     kb.append([InlineKeyboardButton("🖼️ Payment Image", callback_data="pay:img")])
     kb.append([InlineKeyboardButton("👛 Wallet Image", callback_data="pay:walletimg")])
+    kb.append([InlineKeyboardButton("💳 Wallet Checkout Image", callback_data="pay:walletchoiceimg")])
     kb.append([InlineKeyboardButton("❌ Close", callback_data="pay:close")])
     return NL.join(lines), InlineKeyboardMarkup(kb)
 
@@ -289,6 +291,40 @@ async def _safe_edit(query, context, text, kb=None):
             pass
 
 # ========================= buyer payment flow =========================
+# Each "order expired" notice is sent at most once per order, even across
+# restarts/crashes: the order is recorded here BEFORE the message is sent.
+NOTIFIED_FILE = os.path.join(BASE_DIR, "expired_notified.json")
+
+def _expiry_key(user_id, order):
+    return "%s:%s:%s" % (user_id, int(order.get("deadline") or 0), order.get("msg_id"))
+
+def _load_notified():
+    try:
+        with open(NOTIFIED_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def _was_notified(key):
+    return key in _load_notified()
+
+def _mark_notified(key):
+    keys = _load_notified()
+    if key in keys:
+        return
+    keys.append(key)
+    keys = keys[-1000:]
+    tmp = NOTIFIED_FILE + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(keys, f)
+        os.replace(tmp, NOTIFIED_FILE)
+    except Exception as e:
+        print(f"[payments] could not record expiry notice: {e}")
+
+STALE_NOTIFY_WINDOW = 3600   # only tell customers about orders that expired within the last hour
+
 EXPIRED_TEXT = (
     "⏰ This Order Has Expired. Please Create A New Order To Proceed With Your Purchase."
     + NL + NL
@@ -313,6 +349,24 @@ def set_pay_image(file_id):
 
 def get_wallet_image():
     return load_cryptos().get("wallet_image") or get_pay_image()
+
+def get_wallet_choice_image():
+    """Image for the 'Your current balance is ...' (Use Wallet Balance / Use Crypto)
+    screen. Own setting; falls back to the Wallet image, then the Payment image."""
+    return load_cryptos().get("wallet_choice_image") or get_wallet_image()
+
+def set_wallet_choice_image(file_id):
+    data = load_cryptos()
+    data["wallet_choice_image"] = file_id
+    save_cryptos(data)
+
+def _btn_emoji(key, fallback_key=None):
+    """Animated/custom emoji id for a button (admin-settable via action emojis)."""
+    try:
+        import bot
+        return bot.get_action_emoji(key) or (bot.get_action_emoji(fallback_key) if fallback_key else None)
+    except Exception:
+        return None
 
 def set_wallet_image(file_id):
     data = load_cryptos()
@@ -355,39 +409,36 @@ def _amount_display(order):
     return _fmt_crypto(crypto_amount) + " " + crypto_name + " (" + _fmt_money(disp_usd) + ")"
 
 # ========== PICKER SCREEN WITH ANIMATED EMOJIS using RAW API ==========
+# Fixed picker layout, one inner list per row. Matches by crypto id, so it does
+# not depend on the order in cryptos.json. Disabled cryptos are simply skipped
+# (their row gets shorter); any crypto not listed here (e.g. one added later)
+# goes in extra rows of 3 at the bottom.
+PICKER_LAYOUT = [
+    ["btc"],
+    ["ltc", "sol", "eth"],
+    ["usdt_trc20", "usdt_bep20"],
+    ["usdc_erc20", "usdc_sol"],
+]
+
 def _build_crypto_buttons_raw(cryptos):
-    # BTC gets its own full-width row; USDT (TRC20) through USDC (SOL)
-    # pack 2-per-row (double width) in their existing order; everything
-    # from LTC onward keeps the original default 3-per-row packing.
-    rows = []
-    current_row = []
-    current_cap = None
-    tail_started = False
+    by_id = {c.get("id"): c for c in cryptos}
+    placed = set()
 
-    def flush():
-        nonlocal current_row
-        if current_row:
-            rows.append(current_row)
-            current_row = []
-
-    for c in cryptos:
-        chain_id = c.get("id", "")
-        if not tail_started and chain_id == "ltc":
-            tail_started = True
-        if tail_started:
-            cap = 3
-        elif chain_id == "btc":
-            cap = 1
-        else:
-            cap = 2
-        if cap != current_cap or len(current_row) >= cap:
-            flush()
-            current_cap = cap
+    def make(c):
         button = {"text": c["name"], "callback_data": "pay:pick:" + c["id"]}
         if c.get("emoji_id"):
             button["emoji_id"] = c["emoji_id"]
-        current_row.append(button)
-    flush()
+        return button
+
+    rows = []
+    for ids in PICKER_LAYOUT:
+        row = [make(by_id[i]) for i in ids if i in by_id]
+        placed.update(ids)
+        if row:
+            rows.append(row)
+    rest = [make(c) for c in cryptos if c.get("id") not in placed]
+    for i in range(0, len(rest), 3):
+        rows.append(rest[i:i + 3])
     return rows
 
 def _picker_screen_raw(is_admin=False, show_wallet=False, wallet_balance=0.0, note=None):
@@ -411,7 +462,7 @@ def _picker_screen_raw(is_admin=False, show_wallet=False, wallet_balance=0.0, no
             wallet_btn["emoji_id"] = wallet_emoji_id
         keyboard_rows.append([wallet_btn])
 
-    keyboard_rows.append([{"text": "Cancel", "callback_data": "pay:cancel"}])
+    keyboard_rows.append([{"text": "Cancel", "callback_data": "pay:cancel", "emoji_id": _btn_emoji("cancel")}])
 
     if is_admin:
         keyboard_rows.append([
@@ -465,6 +516,34 @@ async def raw_edit_message_caption(chat_id, message_id, caption, keyboard_rows, 
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.post(f"{TG_API}/editMessageCaption", json=payload)
     return _raw_check(r.json(), "editMessageCaption")
+
+async def _show_screen_raw(context, order, text, keyboard_rows, photo=None):
+    """Show a screen in the order's live message, switching the image too.
+    photo -> swap the picture in place (editMessageMedia) when the message already
+    has one, otherwise delete + resend (a text message cannot become a photo).
+    No photo -> plain caption/text edit. Keeps order['msg_id'/'has_photo'] current."""
+    chat_id, msg_id = order["chat_id"], order["msg_id"]
+    has_photo = bool(order.get("has_photo"))
+    if photo and has_photo:
+        try:
+            await raw_edit_message(chat_id, msg_id, text, keyboard_rows, photo)
+            return
+        except Exception as e:
+            print(f"[show_screen_raw] media edit failed, resending: {e}")
+    if photo:
+        await _replace_msg_raw(context, order, text, keyboard_rows, photo)
+        return
+    await _edit_live_raw(context, chat_id, msg_id, has_photo, text, keyboard_rows)
+
+async def _delete_order_msg(context, order):
+    """Delete the live payment-selection message once (idempotent)."""
+    if order.get("_msg_deleted") or not order.get("msg_id"):
+        return
+    try:
+        await context.bot.delete_message(order["chat_id"], order["msg_id"])
+    except Exception:
+        pass
+    order["_msg_deleted"] = True
 
 async def _edit_live_raw(context, chat_id, msg_id, has_photo, text, keyboard_rows=None):
     try:
@@ -545,6 +624,12 @@ async def cmd_cancel(update, context):
     _cancel_task(user_id)
     context.user_data.pop("pay_order", None)
     try:
+        import analytics
+        analytics.track(user_id, "cancel", aid=order.get("aid"))
+        await analytics.notify(context.bot, order.get("aid"), user_id, "cancel")
+    except Exception:
+        pass
+    try:
         await context.bot.delete_message(order["chat_id"], order["msg_id"])
     except Exception:
         pass
@@ -582,7 +667,14 @@ async def _begin_payment_raw(query, context, items, usd, source="cart"):
     context.user_data["pay_order"] = {"state": "choosing", "label": label, "usd": float(usd),
                                       "charge_usd": float(usd), "wallet_used": 0.0,
                                       "user_id": user_id, "items": [dict(it) for it in items],
-                                      "source": source}
+                                      "source": source, "aid": uuid.uuid4().hex[:10]}
+    try:
+        import analytics
+        analytics.track_pay_page(user_id, context.user_data["pay_order"]["aid"], items, usd, source)
+        await analytics.notify(context.bot, context.user_data["pay_order"]["aid"], user_id, "open",
+                               items=items, total=usd, source=source)
+    except Exception:
+        pass
     bal = _wallet_balance(user_id)
     text, keyboard_rows, photo = _picker_screen_raw(_is_admin(user_id), show_wallet=True, wallet_balance=bal)
     await _render_buyer_raw(query, context, text, keyboard_rows, photo)
@@ -621,6 +713,13 @@ async def _on_pick_raw(query, context, cid):
         "has_photo": bool(query.message.photo),
     })
     context.user_data["pay_order"] = order
+    try:
+        import analytics
+        analytics.track(user_id, "crypto", aid=order.get("aid"), crypto=crypto["name"], total=round(charge, 2))
+        await analytics.notify(context.bot, order.get("aid"), user_id, "crypto", crypto=crypto["name"],
+                               crypto_amount=_fmt_crypto(crypto_amount) + " " + crypto["name"])
+    except Exception:
+        pass
     remaining = int(order["deadline"] - time.time())
     text = _payment_detail_text(order, remaining)
     await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], text)
@@ -682,13 +781,22 @@ async def _expire_order_raw(context, user_id):
         return
     order["state"] = "expired"
     try:
-        await context.bot.delete_message(order["chat_id"], order["msg_id"])
+        import analytics
+        analytics.track(user_id, "expired", aid=order.get("aid"))
+        await analytics.notify(context.bot, order.get("aid"), user_id, "expired")
     except Exception:
         pass
     try:
-        await context.bot.send_message(order["chat_id"], EXPIRED_TEXT, parse_mode="HTML")
+        await context.bot.delete_message(order["chat_id"], order["msg_id"])
     except Exception:
         pass
+    key = _expiry_key(user_id, order)
+    if not _was_notified(key):
+        _mark_notified(key)      # record first: at most one notice, ever
+        try:
+            await context.bot.send_message(order["chat_id"], EXPIRED_TEXT, parse_mode="HTML")
+        except Exception:
+            pass
     context.user_data.pop("pay_order", None)
     _ACTIVE_TASKS.pop(user_id, None)
 
@@ -755,10 +863,7 @@ async def _mark_received_raw(context, user_id, verify_res=None):
     if not order:
         return
     order["state"] = "done"
-    try:
-        await context.bot.delete_message(order["chat_id"], order["msg_id"])
-    except Exception:
-        pass
+    await _delete_order_msg(context, order)
 
     if order.get("kind") == "deposit":
         amount = float(order.get("usd", 0) or 0)
@@ -790,26 +895,73 @@ async def _mark_received_raw(context, user_id, verify_res=None):
             pass
     await _finish_purchase_raw(context, user_id, order)
 
+def _success_video(order):
+    """The payment-success video of the first purchased product that has one: (file_id, kind) or (None, None)."""
+    try:
+        import store
+        for it in (order.get("items") or []):
+            prod = None
+            if it.get("pid"):
+                prod = store.get_product(it["pid"])
+            if not prod and it.get("product"):
+                nm = (it.get("product") or "").strip().lower()
+                for pr in store.load_products()["items"].values():
+                    if (pr.get("name") or "").strip().lower() == nm:
+                        prod = pr
+                        break
+            if prod and prod.get("success_video"):
+                return prod["success_video"], prod.get("success_video_type") or "video"
+    except Exception as e:
+        print(f"[payments] success video lookup failed: {e}")
+    return None, None
+
 async def _finish_purchase_raw(context, user_id, order):
+    # Remove the leftover payment-selection / wallet-choice message so only the
+    # "Payment Received Successfully" message remains in the chat.
+    await _delete_order_msg(context, order)
     count = increment_order_count(user_id)
     order_id = str(user_id) + str(count)
-    msg = (
-        "<b>Payment Received Successfully</b>" + NL + NL
-        + "<b>Order ID:</b> " + html.escape(order_id) + NL + NL
-        + "Your payment has been successfully received, and your order is now being processed. "
-        + "Your product will be delivered shortly." + NL + NL
-        + "Thank you for your purchase"
-    )
     try:
-        await context.bot.send_message(order["chat_id"], msg, parse_mode="HTML")
+        import analytics
+        analytics.track(user_id, "paid", aid=order.get("aid"), order_id=order_id,
+                        total=round(float(order.get("usd", 0) or 0), 2),
+                        method=("wallet" if order.get("wallet_full") or not order.get("crypto_name") else "crypto"))
+        await analytics.notify(context.bot, order.get("aid"), user_id, "paid", order_id=order_id)
     except Exception:
         pass
+    msg = (
+        "<b>Payment Received Successfully!</b>" + NL + NL
+        + "Chef Boba is preparing your order." + NL + NL
+        + "<b>Order ID:</b> <code>" + html.escape(order_id) + "</code>" + NL + NL
+        + "Your order will be delivered shortly. Thank you for your purchase!"
+    )
+    video, vkind = _success_video(order)
+    sent = False
+    if video:                                   # same message: video on top, text as its caption
+        try:
+            if vkind == "animation":
+                await context.bot.send_animation(order["chat_id"], video, caption=msg, parse_mode="HTML")
+            else:
+                await context.bot.send_video(order["chat_id"], video, caption=msg, parse_mode="HTML")
+            sent = True
+        except Exception as e:
+            print(f"[payments] could not send payment video: {e}")
+    if not sent:
+        try:
+            await context.bot.send_message(order["chat_id"], msg, parse_mode="HTML")
+        except Exception:
+            pass
     try:
         import cart
         if order.get("source") != "buynow":
             cart._set_cart(user_id, [])
     except Exception:
         pass
+    try:
+        import myorders
+        myorders.record_purchase(user_id, order_id, order)
+    except Exception as e:
+        print(f"[payments] could not save purchase to My Orders: {e}")
     try:
         import orders, store
         record = {
@@ -939,6 +1091,7 @@ async def _replace_msg_raw(context, order, text, keyboard_rows, photo=None):
         m = await raw_send_message(chat_id, text, keyboard_rows)
     if isinstance(m, dict) and m.get("result"):
         order["msg_id"] = m["result"]["message_id"]
+        order["_msg_deleted"] = False
     order["has_photo"] = photo is not None
     return m
 
@@ -959,7 +1112,13 @@ async def _on_callback(update, context):
 
     if action == "cancel":
         _cancel_task(user_id)
-        context.user_data.pop("pay_order", None)
+        _o = context.user_data.pop("pay_order", None) or {}
+        try:
+            import analytics
+            analytics.track(user_id, "cancel", aid=_o.get("aid"))
+            await analytics.notify(context.bot, _o.get("aid"), user_id, "cancel")
+        except Exception:
+            pass
         try:
             await query.message.delete()
         except Exception:
@@ -1013,18 +1172,19 @@ async def _on_callback(update, context):
             context.user_data["pay_order"] = order
             text = f"<b>Your current balance is: {_fmt_money(bal)}</b>"
             keyboard_rows = [
-                [{"text": "Use Wallet Balance", "callback_data": "pay:walletfull"}],
-                [{"text": "Use Crypto", "callback_data": "pay:usecrypto"}],
-                [{"text": "Cancel", "callback_data": "pay:cancel"}],
+                [{"text": "Use Wallet Balance", "callback_data": "pay:walletfull",
+                  "emoji_id": _btn_emoji("use_wallet_balance", "use_wallet")}],
+                [{"text": "Use Crypto", "callback_data": "pay:usecrypto", "emoji_id": _btn_emoji("use_crypto")}],
+                [{"text": "Cancel", "callback_data": "pay:cancel", "emoji_id": _btn_emoji("cancel")}],
             ]
-            await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], text, keyboard_rows)
+            await _show_screen_raw(context, order, text, keyboard_rows, get_wallet_choice_image())
             await query.answer()
             raise ApplicationHandlerStop
         order["state"] = "await_wallet_amount"
         context.user_data["pay_order"] = order
         msg = ("<b>Your current balance is: " + _fmt_money(bal) + "</b>" + NL
                + "How much would you like to use?")
-        await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], msg)
+        await _show_screen_raw(context, order, msg, [], get_wallet_choice_image())
         await query.answer()
         raise ApplicationHandlerStop
 
@@ -1069,7 +1229,7 @@ async def _on_callback(update, context):
             note = ("💳 Wallet applied: <b>" + _fmt_money(order["wallet_used"]) + "</b>" + NL
                     + "💰 Remaining to pay: <b>" + _fmt_money(order["charge_usd"]) + "</b>")
         text, keyboard_rows, photo = _picker_screen_raw(_is_admin(user_id), note=note)
-        await _edit_live_raw(context, order["chat_id"], order["msg_id"], order["has_photo"], text, keyboard_rows)
+        await _show_screen_raw(context, order, text, keyboard_rows, photo)
         await query.answer()
         raise ApplicationHandlerStop
 
@@ -1125,6 +1285,17 @@ async def _on_callback(update, context):
                          "👛 Send the IMAGE buyers will see on the Wallet screen." + NL
                          + "Currently set: " + cur + NL
                          + "(send 0 to remove it and fall back to the Payment Image)")
+        await query.answer()
+        raise ApplicationHandlerStop
+
+    if action == "walletchoiceimg":
+        context.user_data["pay_flow"] = {"step": "set_wallet_choice_image"}
+        cur = "yes" if load_cryptos().get("wallet_choice_image") else "no (falls back to Wallet / Payment Image)"
+        await _safe_edit(query, context,
+                         "💳 Send the IMAGE buyers will see on the wallet checkout screen "
+                         "(Use Wallet Balance / Use Crypto / Cancel)." + NL
+                         + "Currently set: " + cur + NL
+                         + "(send 0 to remove it)")
         await query.answer()
         raise ApplicationHandlerStop
 
@@ -1411,6 +1582,16 @@ async def _on_text(update, context):
             await update.message.reply_text("Please send a photo, or send 0 to remove it.")
         raise ApplicationHandlerStop
 
+    if step == "set_wallet_choice_image":
+        if text == "0":
+            set_wallet_choice_image(None)
+            context.user_data.pop("pay_flow", None)
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="pay:admin")]])
+            await update.message.reply_text("💳 Wallet checkout image removed.", reply_markup=kb)
+        else:
+            await update.message.reply_text("Please send a photo, or send 0 to remove it.")
+        raise ApplicationHandlerStop
+
     if step == "edit_picker_text":
         set_picker_text(text)
         context.user_data.pop("pay_flow", None)
@@ -1461,12 +1642,15 @@ async def _on_text(update, context):
 # ========================= PHOTO INPUT =========================
 async def _on_photo(update, context):
     flow = context.user_data.get("pay_flow")
-    if not flow or flow.get("step") not in ("set_pay_image", "set_wallet_image"):
+    if not flow or flow.get("step") not in ("set_pay_image", "set_wallet_image", "set_wallet_choice_image"):
         return
     if update.effective_user.id != ADMIN_ID:
         return
     file_id = update.message.photo[-1].file_id
-    if flow.get("step") == "set_wallet_image":
+    if flow.get("step") == "set_wallet_choice_image":
+        set_wallet_choice_image(file_id)
+        confirm_text = "✅ Wallet checkout image updated."
+    elif flow.get("step") == "set_wallet_image":
         set_wallet_image(file_id)
         confirm_text = "✅ Wallet image updated."
     else:
@@ -1508,13 +1692,21 @@ async def resume_pending_orders(application):
     stopped, so a restart never abandons an order the buyer was mid-paying."""
     resumed = 0
     expired = 0
-    for user_id, data in application.user_data.items():
+    touched = []   # user ids whose saved data we changed
+    now = time.time()
+    for user_id, data in list(application.user_data.items()):
         order = data.get("pay_order")
         if not order or order.get("state") != "await_payment":
             continue
         context = ContextTypes.DEFAULT_TYPE(application=application, chat_id=order.get("chat_id"), user_id=user_id)
-        if order.get("deadline", 0) <= time.time():
+        if order.get("deadline", 0) <= now:
             expired += 1
+            touched.append(user_id)
+            if now - order.get("deadline", 0) > STALE_NOTIFY_WINDOW:
+                # Long dead (e.g. abandoned days ago): just clean it up, do not
+                # message the customer about an old order out of the blue.
+                data.pop("pay_order", None)
+                continue
             try:
                 await _expire_order_raw(context, user_id)
             except Exception as e:
@@ -1532,7 +1724,13 @@ async def resume_pending_orders(application):
         # stale order would stay on disk and get "expired" again - resending
         # the same notification to the same customer - on every future
         # restart. Force a flush now so it's actually gone for good.
+        # update_persistence() alone is not enough: it only saves users flagged
+        # by a real Telegram update, so the cleared orders were never written
+        # and were "expired" (and the customer messaged) again on every restart.
+        # Save the changed users explicitly, then flush to disk.
         try:
-            await application.update_persistence()
+            for uid in touched:
+                await application.persistence.update_user_data(uid, application.user_data[uid])
+            await application.persistence.flush()
         except Exception as e:
             print(f"[payments] failed to persist cleared stale orders: {e}")

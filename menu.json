@@ -12,6 +12,12 @@
     "emoji_id": "5447410659077661506"
   },
   {
+    "id": "music",
+    "text": "Music Streaming",
+    "size": "full",
+    "emoji_id": "5354899958329784877"
+  },
+  {
     "id": "software",
     "text": "Creative & Carrer Tools",
     "size": "full",
@@ -39,15 +45,21 @@
     "emoji_id": "5215420556089776398"
   },
   {
-    "id": "support",
-    "text": "Support",
-    "size": "full",
-    "emoji_id": "5443038326535759644"
-  },
-  {
     "id": "viewcart",
     "text": "View Cart",
     "size": "full",
     "emoji_id": "5312361253610475399"
+  },
+  {
+    "id": "myorders",
+    "text": "My Orders",
+    "size": "full",
+    "emoji_id": "5348181001686235664"
+  },
+  {
+    "id": "support",
+    "text": "Support",
+    "size": "full",
+    "emoji_id": "5443038326535759644"
   }
 ]
