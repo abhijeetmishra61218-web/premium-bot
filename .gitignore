@@ -25,3 +25,21 @@ wallets.json
 botstate.json
 smmdata.json
 start_bots.sh
+
+# Private credentials
+.env
+.env.*
+!.env.example
+
+# Backups and temporary files
+backups/
+*.bak
+*.before_*
+*.manual_backup*
+*.working_backup
+*.pre_claude_deploy
+
+# Runtime data
+*.pkl
+*.jsonl
+heartbeat.txt
