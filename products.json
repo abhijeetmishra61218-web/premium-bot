@@ -275,12 +275,21 @@
           "name": "1 Month",
           "price": "$15",
           "image": "AgACAgUAAxkBAAIRMWo3pVowo45bvCz1kRzNUBB1f6kAAyYTaxvz7sBV696gib89O7MBAAMCAAN5AAM8BA",
-          "stock": 1,
+          "stock": 0,
           "paused": false,
           "warranty": 1
+        },
+        {
+          "id": "a7f60b",
+          "name": "2 Months",
+          "price": "$30",
+          "image": "AgACAgUAAxkBAAI_WWsAAbbBKxnJTfdVdDRv-cVrEyHj3gAC4xFrG46_CVTUZbVf-sz3OwEAAwIAA3kAAz0E",
+          "stock": 1,
+          "paused": false,
+          "warranty": 2
         }
       ],
-      "stock": 0,
+      "stock": -1,
       "paused": false,
       "emoji_id": "5877651964208091297",
       "success_video": "CgACAgUAAxkBAAI2IGrjB75k6LSEyTC34H3RoQETVlBmAAKQIgACCgMYVx0eDBLPoGOTPQQ",
@@ -614,36 +623,24 @@
       "paused": false,
       "emoji_id": "6105050957609968229"
     },
-    "24e1c5ed": {
+    "ab3a4100": {
       "category": "software",
-      "name": "Creative Cloud Pro",
-      "description": "Unlock industry-leading creativity with Adobe Creative Cloud, featuring professional tools for design, video, photography, and more — fully backed by warranty.",
-      "image": "AgACAgUAAxkBAAI9Jmr959CLE0x4a5gI9DNjaPX_LwtLAAJ5Emsb_VfwV5CENTy1BsGbAQADAgADeQADPQQ",
+      "name": "CapCut Pro",
+      "description": "Unlock premium video editing tools, exclusive templates, effects, transitions, filters, fonts, advanced AI features, high-quality exports and more",
+      "image": "AgACAgUAAxkBAAI_CmsAAUXWudnrOi-6iovrPSp6p2j1bwACPBVrG46_AVQOwZ1R38qABwEAAwIAA3kAAz0E",
       "plans": [
         {
-          "id": "fea44b",
-          "name": "4 Months",
-          "price": "$55",
-          "image": "AgACAgUAAxkBAAIKx2ogDI_373ntgoJnrAzrWiGI4p8MAALYD2sb_HcAAVWE_tpAz4lzyAEAAwIAA3kAAzsE",
+          "id": "bd8102",
+          "name": "1 Month",
+          "price": "$12",
+          "image": "AgACAgUAAxkBAAI_AmsAAUWsGPZvZHmJylPu_f4Dkc56dAACOxVrG46_AVQ8dANIHNbpuAEAAwIAA3kAAz0E",
           "stock": -1,
-          "paused": false,
-          "warranty": 4
-        },
-        {
-          "id": "f08804",
-          "name": "12 Months",
-          "price": "$145",
-          "image": "AgACAgUAAxkBAAIJLmofVQ0AAVYjj3mgHQ_yqEAsLrl_NQACVxBrG6HQAVUAAa9DxDgewBsBAAMCAAN5AAM7BA",
-          "stock": -1,
-          "paused": false,
-          "warranty": 12
+          "paused": false
         }
       ],
       "stock": -1,
       "paused": false,
-      "emoji_id": "5879697188979740680",
-      "success_video": "CgACAgUAAxkBAAI2FWrjBxbaifqVYfF84qSLlHS17j75AAKNIgACCgMYV0Avp_fdb9QvPQQ",
-      "success_video_type": "animation"
+      "emoji_id": "5364339557712020484"
     },
     "192e54c5": {
       "category": "vpn",
@@ -704,7 +701,39 @@
         }
       ],
       "stock": -1,
-      "paused": false
+      "paused": false,
+      "emoji_id": "5816862049367494010"
+    },
+    "24e1c5ed": {
+      "category": "software",
+      "name": "Creative Cloud Pro",
+      "description": "Unlock industry-leading creativity with Adobe Creative Cloud, featuring professional tools for design, video, photography, and more — fully backed by warranty.",
+      "image": "AgACAgUAAxkBAAI9Jmr959CLE0x4a5gI9DNjaPX_LwtLAAJ5Emsb_VfwV5CENTy1BsGbAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "fea44b",
+          "name": "4 Months",
+          "price": "$55",
+          "image": "AgACAgUAAxkBAAIKx2ogDI_373ntgoJnrAzrWiGI4p8MAALYD2sb_HcAAVWE_tpAz4lzyAEAAwIAA3kAAzsE",
+          "stock": -1,
+          "paused": false,
+          "warranty": 4
+        },
+        {
+          "id": "f08804",
+          "name": "12 Months",
+          "price": "$145",
+          "image": "AgACAgUAAxkBAAIJLmofVQ0AAVYjj3mgHQ_yqEAsLrl_NQACVxBrG6HQAVUAAa9DxDgewBsBAAMCAAN5AAM7BA",
+          "stock": -1,
+          "paused": false,
+          "warranty": 12
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5879697188979740680",
+      "success_video": "CgACAgUAAxkBAAI2FWrjBxbaifqVYfF84qSLlHS17j75AAKNIgACCgMYV0Avp_fdb9QvPQQ",
+      "success_video_type": "animation"
     }
   }
 }

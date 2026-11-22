@@ -13,10 +13,29 @@ import urllib.request
 import urllib.parse
 from datetime import datetime
 
-# ---- identities / tokens (edit here if they ever change) ----
+# ---- identities / tokens ----
+# The bot tokens are NOT stored in this file (it is uploaded to GitHub). They live in the private
+# ".env" file next to it:   BOT_TOKEN=...   ORDERS_BOT_TOKEN=...
 OWNER_ID = 6684244590
-MAIN_BOT_TOKEN = "8712977638:AAFyazkpU-69d-5aokGYN_vb3JHWk6u_GfE"
-ORDERS_BOT_TOKEN = "8912944844:AAEs8bPTGQVZEpFCeYExoBcMJkAiN4OP_Ak"
+
+def _env_value(name):
+    value = os.environ.get(name)
+    if value:
+        return value
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    if k.strip() == name and v.strip():
+                        return v.strip().strip('"').strip("'")
+    except FileNotFoundError:
+        pass
+    raise SystemExit("Missing " + name + " in the .env file (see deploy instructions).")
+
+MAIN_BOT_TOKEN = _env_value("BOT_TOKEN")
+ORDERS_BOT_TOKEN = _env_value("ORDERS_BOT_TOKEN")
 
 # customer-type thresholds (by number of paid orders)
 FREQUENT_MIN = 10
@@ -31,6 +50,7 @@ WALLET_FILE = os.path.join(BASE_DIR, "wallets.json")
 ORDERS_LOG = os.path.join(BASE_DIR, "orders_log.json")
 PRODUCTS_FILE = os.path.join(BASE_DIR, "products.json")
 STOCK_INTEREST_FILE = os.path.join(BASE_DIR, "stock_interest.json")
+STOCK_INTEREST_TIMES_FILE = os.path.join(BASE_DIR, "stock_interest_times.json")   # when each customer tapped Notify Me
 
 # ========================= low-level json =========================
 def _load(path, default):
@@ -273,6 +293,26 @@ def add_stock_interest(pid, plan_id, user_id):
         lst.append(user_id)
         data[key] = lst
         _save(STOCK_INTEREST_FILE, data)
+    try:                                    # remember the date of the (first) tap; older entries have none
+        times = _load(STOCK_INTEREST_TIMES_FILE, {})
+        slot = times.setdefault(key, {})
+        if str(user_id) not in slot:
+            slot[str(user_id)] = time.time()
+            _save(STOCK_INTEREST_TIMES_FILE, times)
+    except Exception:
+        pass
+
+def list_all_stock_interest():
+    """Everyone waiting for a restock: [(pid, plan_id or None, user_id, tap time or None), ...]."""
+    data = _load(STOCK_INTEREST_FILE, {})
+    times = _load(STOCK_INTEREST_TIMES_FILE, {})
+    out = []
+    for key, uids in data.items():
+        pid, _, plan_id = key.partition(":")
+        plan_id = None if plan_id in ("", "_") else plan_id
+        for uid in uids:
+            out.append((pid, plan_id, uid, (times.get(key) or {}).get(str(uid))))
+    return out
 
 def get_stock_interest(pid, plan_id=None):
     data = _load(STOCK_INTEREST_FILE, {})
@@ -284,6 +324,13 @@ def clear_stock_interest(pid, plan_id=None):
     if key in data:
         del data[key]
         _save(STOCK_INTEREST_FILE, data)
+    try:
+        times = _load(STOCK_INTEREST_TIMES_FILE, {})
+        if key in times:
+            del times[key]
+            _save(STOCK_INTEREST_TIMES_FILE, times)
+    except Exception:
+        pass
 
 def pause_product(pid, paused):
     """Pause/unpause a product (True = paused, False = active)"""

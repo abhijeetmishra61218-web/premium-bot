@@ -713,6 +713,7 @@ Order Management:
 /clicks [days] - Full click log as a CSV file
 /clicks @username [days] - One customer's timeline
 /anotify - Turn the "new payment page opened" alert on/off
+/notify - List customers waiting for a restock (Notify Me): username, id, product, plan, date
 /trackme - Turn tracking of your own clicks on/off (testing)
 /orders - Show all orders statistics
 /stats @username - Show order statistics of a specific user
@@ -951,6 +952,58 @@ async def cmd_unban(update, context):
         return
     store.unban(user_id)
     await update.message.reply_text(f"User @{username} has been unbanned.")
+
+async def cmd_notify(update, context):
+    """Owner: everyone who tapped "Notify Me" on an out-of-stock product or plan."""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("This command is only for admins.")
+        return
+    from datetime import datetime, timedelta, timezone
+    ist = timezone(timedelta(hours=5, minutes=30))
+    rows = store.list_all_stock_interest()
+    if not rows:
+        await update.message.reply_text("Nobody is waiting for a restock right now.")
+        return
+    users = store.load_users()
+    products = load_products()["items"]
+    groups = {}
+    for pid, plan_id, uid, ts in rows:
+        groups.setdefault((pid, plan_id), []).append((uid, ts))
+    blocks = ["<b>WAITING FOR RESTOCK</b> - " + str(len(rows)) + " request" + ("s" if len(rows) != 1 else "")
+              + " from " + str(len({r[2] for r in rows})) + " customer" + ("s" if len({r[2] for r in rows}) != 1 else "")
+              + NL + "<i>username - user id - product - plan - date they tapped Notify Me (IST)</i>"]
+    def label_of(key):
+        prod = products.get(key[0])
+        pname = prod["name"] if prod else "(deleted product)"
+        plan = find_plan(prod, key[1]) if (prod and key[1]) else None
+        return pname, (plan["name"] if plan else ("(whole product)" if not key[1] else "(deleted plan)")), prod, plan
+    for key in sorted(groups, key=lambda k: (label_of(k)[0].lower(), label_of(k)[1].lower())):
+        pname, plname, prod, plan = label_of(key)
+        back = ""
+        try:
+            if prod:
+                ok = store.check_plan_availability(prod, plan)[0] if plan else store.check_product_availability(prod)[0]
+                if ok:
+                    back = "  ✅ <b>in stock now</b>"
+        except Exception:
+            pass
+        lines = ["<b>" + html.escape(pname) + " - " + html.escape(plname) + "</b>" + back]
+        for uid, ts in sorted(groups[key], key=lambda x: (x[1] is None, x[1] or 0)):
+            u = users.get(str(uid), {})
+            un = (u.get("username") or "").strip()
+            who = "@" + un if un else (u.get("first_name") or "no username")
+            when = datetime.fromtimestamp(ts, ist).strftime("%d %b %Y, %H:%M") if ts else "date not recorded"
+            lines.append('<a href="tg://user?id=%d">%s</a> - <code>%d</code> - %s - %s - %s' % (
+                uid, html.escape(who), uid, html.escape(pname), html.escape(plname), when))
+        blocks.append(NL.join(lines))
+    chunk = ""
+    for b in blocks:
+        if chunk and len(chunk) + len(b) + 2 > 3800:
+            await update.message.reply_text(chunk, parse_mode="HTML", disable_web_page_preview=True)
+            chunk = ""
+        chunk += (NL + NL if chunk else "") + b
+    if chunk:
+        await update.message.reply_text(chunk, parse_mode="HTML", disable_web_page_preview=True)
 
 async def cmd_active(update, context):
     if update.effective_user.id != ADMIN_ID:
@@ -3469,6 +3522,7 @@ def main():
     app.add_handler(CommandHandler("ban", cmd_ban))
     app.add_handler(CommandHandler("unban", cmd_unban))
     app.add_handler(CommandHandler("active", cmd_active))
+    app.add_handler(CommandHandler("notify", cmd_notify))
     app.add_handler(CommandHandler("orders", cmd_orders))
     app.add_handler(CommandHandler("broadcast", cmd_broadcast))
     app.add_handler(CommandHandler("stats", cmd_stats))
