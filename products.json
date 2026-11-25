@@ -352,7 +352,7 @@
         {
           "id": "c61534",
           "name": "3 Months",
-          "price": "$15",
+          "price": "$20",
           "image": "AgACAgUAAxkBAAIJTWofVw88VvOkmODvZEGtiOnWVrBJAAJaEGsbodABVfwiiNztZxgJAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false,
@@ -361,7 +361,7 @@
         {
           "id": "e5a895",
           "name": "6 Months",
-          "price": "$25",
+          "price": "$30",
           "image": "AgACAgUAAxkBAAIJJWofVNvioGXA5W6VLjxAoSL8Bs5BAAJWEGsbodABVZzLNYoax4lYAQADAgADeQADOwQ",
           "stock": -1,
           "paused": false,
@@ -734,6 +734,25 @@
       "emoji_id": "5879697188979740680",
       "success_video": "CgACAgUAAxkBAAI2FWrjBxbaifqVYfF84qSLlHS17j75AAKNIgACCgMYV0Avp_fdb9QvPQQ",
       "success_video_type": "animation"
+    },
+    "b92e08f8": {
+      "category": "software",
+      "name": "Discord Nitro",
+      "description": "Benfits : Enjoy 1GB file uploads, HD streaming, 2 Server Boosts, animated emojis, exclusive stickers, custom profiles, themes, unlimited Super Reactions , premium Nitro perks  and more.\n\nThis Product Comes With Full Warranty",
+      "image": "AgACAgUAAxkBAAJA8WsDeWxQaKDTkx4NewfcYHqaLNwPAAKOFmsbNBAYVLk3E6Uu7GFZAQADAgADeQADPQQ",
+      "plans": [
+        {
+          "id": "a159c4",
+          "name": "3 Months",
+          "price": "$20",
+          "image": "AgACAgUAAxkBAAJA_GsDedfx1nNMFdQscc662sEI6eseAAKQFmsbNBAYVCriT-O_TS1sAQADAgADeQADPQQ",
+          "stock": -1,
+          "paused": false
+        }
+      ],
+      "stock": -1,
+      "paused": false,
+      "emoji_id": "5870838475334357951"
     }
   }
 }
